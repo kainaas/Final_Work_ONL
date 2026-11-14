@@ -1,7 +1,5 @@
 from objects import *
 from quadrature import *
-from liquid import *
-from solve import *
 import const
 
 import numpy as np

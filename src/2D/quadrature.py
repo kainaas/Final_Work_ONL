@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 import matplotlib
 
 from objects import *
-from liquid import *
 import const
 
 class Gauss_Legendre:

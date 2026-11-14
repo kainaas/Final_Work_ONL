@@ -6,15 +6,17 @@ from quadrature_triangle import *
 
 
 def find_droplet_optimization_3d(droplet_Volume:float, Bond: float, num_stacks: int, num_sectors:float, nozzle:np.array,  constraints: List = []) -> Droplet:
+    
+    center = point(0.0, 0.0, -0.2)
     mesh = Mesh.cut_sphere(
         r=1.0,
         num_sectors=num_sectors,
         num_stacks=num_stacks,
         min_theta=np.pi / 2.0,
-        z_center= -0.05
+        z_center= center[2]
     )
 
-    center = point(0.0, 0.0, -0.05)
+    
     N = len(mesh.points)
     x0 = np.full(N, 0.0)
     
