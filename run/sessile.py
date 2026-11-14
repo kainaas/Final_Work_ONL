@@ -1,6 +1,6 @@
 from sys import path
 
-path.append("./../src")
+path.append("./../src/2D")
 
 from droplet import *
 import numpy as np

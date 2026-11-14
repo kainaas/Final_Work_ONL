@@ -1,6 +1,6 @@
 from sys import path
 
-path.append("./../src")
+path.append("./../src/2D")
 
 import numpy as np
 import matplotlib.pyplot as plt

@@ -1,3 +1,7 @@
+from sys import path
+
+path.append("./../src/2D")
+
 from droplet import * 
 
 
