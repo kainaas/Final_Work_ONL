@@ -101,8 +101,8 @@ def energy_3D(x: np.array, mesh: Mesh, Bond: float, center: np.array) -> float:
     normals, areas = m.calculate_face_normals()
     G = 2.0 * areas
 
-    points = np.asarray(mesh.points)
-    connectivity = np.asarray(mesh.connectivity, dtype=int)
+    points = np.asarray(m.points)
+    connectivity = np.asarray(m.connectivity, dtype=int)
 
     # Construct triangular faces
     triangles = points[connectivity]
@@ -130,8 +130,8 @@ def volume_3D(x: np.array, mesh: Mesh, center:np.array) -> float:
     normals, areas = m.calculate_face_normals()
     G = 2.0 * areas
 
-    points = np.asarray(mesh.points)
-    connectivity = np.asarray(mesh.connectivity, dtype=int)
+    points = np.asarray(m.points)
+    connectivity = np.asarray(m.connectivity, dtype=int)
 
     # Construct triangular faces
     triangles = points[connectivity]

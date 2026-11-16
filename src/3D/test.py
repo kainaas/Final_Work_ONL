@@ -8,7 +8,7 @@ a = np.sqrt(2) * 0.001
 g = 9.81
 Bond = a**2 * density * g / gamma
 
-V_adim = 5.0
+V_adim = 1.0
 
 nozzle = np.array([
     [1.0, 1.0],
@@ -16,5 +16,5 @@ nozzle = np.array([
     [-1.0, -1.0],
     [-1.0, 1.0]
 ])
-d = find_droplet_optimization_3d(V_adim, Bond, 16, 32, nozzle)
+d = find_droplet_optimization_3d(V_adim, Bond, 8, 16, nozzle)
 plot_mesh(d)

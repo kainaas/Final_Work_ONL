@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.optimize as optm
+from scipy.optimize._numdiff import approx_derivative
 
 import const
 from droplet import *
@@ -38,9 +39,52 @@ def volume_droplet(x: np.array, Lpoints0: np.array, center:np.array) -> float:
     return (2.0/3.0) * np.pi * Gauss_Legendre.integrate_vector(f)
 
 
-def find_droplet_optimization(droplet_Volume:float, a: float, Bond: float, points_num: int,  constraints: List = []) -> Droplet:
-    center = point(0.0, 0.0)
-    arc = Arc(point(1.0, 0.0), point(0.0, -1.0), center, True, False)
+
+
+from typing import Optional
+
+def find_droplet_optimization(
+    droplet_Volume: float,
+    a: float,
+    Bond: float,
+    points_num: int,
+    constraints: Optional[list] = None,
+    verbose: bool = True
+):
+    if constraints is None:
+        constraints = []
+    else:
+        constraints = list(constraints)
+    def volume(h):
+        return np.pi * (
+            h + 2/3 * (
+                h**3 + (1 + h**2)**1.5
+            )
+        )
+
+    def dvolume(h):
+        return np.pi * (
+            np.sqrt(1 + h**2) + h
+        )**2
+
+    def sphere_from_volume(V0, h0=0.0):
+        h = optm.newton(
+            lambda h: volume(h) - V0,
+            x0=h0,
+            fprime=dvolume,
+            tol=1e-12
+        )
+        R = np.sqrt(1 + h**2)
+        return R, h
+
+
+    R,h = sphere_from_volume(droplet_Volume)
+
+    center = point(0.0, -h)
+    arc = Arc(point(1.0, 0.0), point(0.0, -h - R), center, True, False)
+    # center = point(0.0, 0.0)
+    # arc = Arc(point(1.0, 0.0), point(0.0, -1.0), center, True, False)
+    
     ctr = Contour(1.0)
     ctr.add_component(arc)
     ctr.discretize_n_lines(points_num-1)
@@ -74,28 +118,48 @@ def find_droplet_optimization(droplet_Volume:float, a: float, Bond: float, point
             'disp': True
         }
     )
-    print("Success:", res.success)
-    print("Message:", res.message)
-    print("Iterations:", res.nit)
-    print("Energy:", res.fun)
+    if verbose:
+        print("Success:", res.success)
+        print("Message:", res.message)
+        print("Iterations:", res.nit)
+        print("Energy:", res.fun)
 
-    print("Target volume:", droplet_Volume)
-    print("Computed volume:", volume_droplet(
-        res.x, Lpoints0, center
-    ))
+        print("Target volume:", droplet_Volume)
+        print("Computed volume:", volume_droplet(
+            res.x, Lpoints0, center
+        ))
 
-    print("Constraint error:", abs(
-        volume_droplet(res.x, Lpoints0, center)
-        - droplet_Volume
-    ))
+        print("Constraint error:", abs(
+            volume_droplet(res.x, Lpoints0, center)
+            - droplet_Volume
+        ))
 
-    print("Gradient norm:", np.linalg.norm(res.jac))
+        print("Gradient norm:", np.linalg.norm(res.jac))
 
 
     res_points, N = deform_droplet(res.x, Lpoints0, center)
     r = np.flip(res_points[0,:])
-    z = np.flip(res_points[1,:])
-    return Droplet(r, z, droplet_Volume, None, a, adimensional=True)
+    z = np.flip(res_points[1,:]) - res_points[1,-1]
+
+
+    def compute_lambda(y):
+
+        grad_E = approx_derivative(energy, y).ravel()
+        grad_V = approx_derivative(v, y).ravel()
+
+        # Exclude the first variable, which is fixed.
+        grad_E = grad_E[1:]
+        grad_V = grad_V[1:]
+
+        denominator = np.dot(grad_V, grad_V)
+
+        if denominator <= const.EPSILON:
+            raise RuntimeError("Volume gradient is too small.")
+
+        return np.dot(grad_V, grad_E) / denominator
+
+    return Droplet(r, z, droplet_Volume, None, a, adimensional=True), compute_lambda(res.x)
+
 
 
 
@@ -108,7 +172,7 @@ if __name__ == "__main__":
     Bond = a**2 * density * const.g / gamma
     # Bond = 0.0
     V_adim = 40.0
-    droplet = find_droplet_optimization(V_adim, a, Bond, 100)
+    droplet, res = find_droplet_optimization(V_adim, a, Bond, 100)
     
     fig, ax = plt.subplots(1, 1)
     ax.set_aspect("equal")
