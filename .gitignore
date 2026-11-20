@@ -1,4 +1,11 @@
-*pycache*/
+## Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+.ipynb_checkpoints/
 
 
 ## Core latex/pdflatex auxiliary files:
@@ -313,7 +320,7 @@ TSWLatexianTemp*
 *.tps
 
 # auto folder when using emacs and auctex
-./auto/*
+/auto/
 *.el
 
 # expex forward references with \gathertags

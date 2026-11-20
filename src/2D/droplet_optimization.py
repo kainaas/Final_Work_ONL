@@ -27,6 +27,17 @@ def potential_energy(x: np.array, Lpoints0: np.array, center:np.array, Bond: flo
     return Gauss_Legendre.integrate_vector(f)
 
 
+def surface_droplet(points: np.array) -> float:
+    '''
+        Area of the surface of revolution of the polygonal profile points (2, N),
+        rows (r, z). Each segment generates a conical frustum of area
+        2 pi * mean radius * length, so the result is exact for the polygon.
+    '''
+    r_mean = (points[0, :-1] + points[0, 1:]) / 2.0
+    lengths = np.linalg.norm(np.diff(points, axis=1), axis=0)
+    return float(2.0 * np.pi * np.sum(r_mean * lengths))
+
+
 def volume_droplet(x: np.array, Lpoints0: np.array, center:np.array) -> float:
     points, N = deform_droplet(x, Lpoints0, center)
     Lmatrix = np.vstack([points[:, :-1], np.ones((1,N-1)), points[:,1:], np.ones((1,N-1))])
@@ -158,7 +169,8 @@ def find_droplet_optimization(
 
         return np.dot(grad_V, grad_E) / denominator
 
-    return Droplet(r, z, droplet_Volume, None, a, adimensional=True), compute_lambda(res.x)
+    S = surface_droplet(res_points)
+    return Droplet(r, z, droplet_Volume, S, a, adimensional=True), compute_lambda(res.x)
 
 
 

@@ -229,9 +229,9 @@ class Arc(Circle):
         '''
         diff = self.get_angular_size()
 
-        if diff < 1e-12: 
-            super().plot(ax, n_segments)
-            return
+        if diff < 1e-12:
+            # start == end: treated as the full circle, starting at x1
+            diff = 2 * np.pi
 
         v1 = self.x1 - self.c
         theta1 = angle_origin_vector(v1)
