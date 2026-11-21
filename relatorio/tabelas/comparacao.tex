@@ -1,0 +1,17 @@
+\begin{tabular}{llcccc}
+\toprule
+$\hat V$ & Método & $\hat d$ & $\hat\lambda$ & Iterações & Tempo (s) \\
+\midrule
+$\hat V^*/3$ & EDO (tiro) & \num{2.638192} & \num{0.367023} & --- & --- \\
+ & SLSQP & \num{2.644205} & \num{0.367151} & 33 & \num{0.33} \\
+ & Lagr. aumentado & \num{2.644204} & \num{0.367151} & 4 (287) & \num{0.19} \\
+\midrule
+$2\hat V^*/3$ & EDO (tiro) & \num{3.808177} & \num{0.244863} & --- & --- \\
+ & SLSQP & \num{3.817061} & \num{0.245067} & 35 & \num{0.36} \\
+ & Lagr. aumentado & \num{3.817059} & \num{0.245067} & 4 (270) & \num{0.19} \\
+\midrule
+$\hat V^*$ & EDO (tiro) & \num{5.371101} & \num{0.150701} & --- & --- \\
+ & SLSQP & \num{5.253629} & \num{0.155718} & 52 & \num{0.49} \\
+ & Lagr. aumentado & \num{5.253608} & \num{0.155719} & 5 (361) & \num{0.22} \\
+\bottomrule
+\end{tabular}
