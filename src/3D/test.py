@@ -9,7 +9,7 @@ a = np.sqrt(2) * 0.001
 g = 9.81
 Bond = a**2 * density * g / gamma
 
-V_adim = 1.0
+V_adim = 1
 
 nozzle = np.array([
     [1.0, 1.0],
