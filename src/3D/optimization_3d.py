@@ -28,13 +28,40 @@ def find_droplet_optimization_3d(
     # volume constraint does not accumulate between calls
     constraints = list(constraints or [])
 
-    center = point(0.0, 0.0, -0.2)
+
+    def volume(h):
+        return np.pi * (
+            h + 2/3 * (
+                h**3 + (1 + h**2)**1.5
+            )
+        )
+    
+    def dvolume(h):
+        return np.pi * (
+            np.sqrt(1 + h**2) + h
+        )**2
+
+    def sphere_from_volume(V0, h0=0.0):
+        h = optm.newton(
+            lambda h: volume(h) - V0,
+            x0=h0,
+            fprime=dvolume,
+            tol=1e-12
+        )
+        R = np.sqrt(1 + h**2)
+        return R, h
+
+    R,h = sphere_from_volume(droplet_Volume)
+
+
+    center = point(0.0, 0.0, -h)
+
     mesh = Mesh.cut_sphere(
-        r=1.0,
+        r=R,
         num_sectors=num_sectors,
         num_stacks=num_stacks,
-        min_theta=np.pi / 2.0,
-        z_center=center[2]
+        min_theta=np.arccos(h/R),
+        z_center=center[2] - R/4.0
     )
 
     # only the spherical vertices are variables; the nozzle ring is fixed

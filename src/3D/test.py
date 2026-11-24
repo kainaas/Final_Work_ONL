@@ -9,7 +9,7 @@ a = np.sqrt(2) * 0.001
 g = 9.81
 Bond = a**2 * density * g / gamma
 
-V_adim = 1
+V_adim = 10.0
 
 nozzle = np.array([
     [1.0, 1.0],
@@ -18,5 +18,5 @@ nozzle = np.array([
     [-1.0, 1.0]
 ])
 # fix_boundary=True keeps the contact line (spherical cut ring) fixed
-d = find_droplet_optimization_3d(V_adim, Bond, 8, 16, nozzle, fix_boundary=False, QuadRule="strang3")
+d = find_droplet_optimization_3d(V_adim, Bond, 16, 16, nozzle, fix_boundary=False, QuadRule="strang3")
 plot_mesh(d)
