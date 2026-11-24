@@ -95,59 +95,60 @@ class Quadrature:
 
 
 
-def energy_3D(x: np.array, mesh: Mesh, Bond: float, center: np.array) -> float:
+def _rule(QuadRule: str):
+    '''
+        Returns (points (P, 2), weights (P,)) of QuadRule on the master triangle.
+    '''
+    if QuadRule not in Quadrature.points:
+        raise ValueError(f"Unknown quadrature rule: {QuadRule}")
+    return np.asarray(Quadrature.points[QuadRule]), Quadrature.weights[QuadRule]
+
+
+def _triangle_geometry(x: np.array, mesh: Mesh, center: np.array, QuadRule: str):
+    '''
+        Geometry of every triangle of the deformed mesh at every quadrature point.
+
+        Returns
+        -------
+        T : ndarray (F, P, 3)
+            Position T(xi) = a + xi_0 (b - a) + xi_1 (c - a) of each quadrature point.
+        normals : ndarray (F, 3)
+            Unit outward normals (constant on each flat triangle).
+        G : ndarray (F,)
+            Jacobian of the map (twice the triangle area).
+        weights : ndarray (P,)
+            Quadrature weights (they sum to 1).
+    '''
+    xi, weights = _rule(QuadRule)
     m = deformed_mesh(x, mesh, center)
-    
     normals, areas = m.calculate_face_normals()
-    G = 2.0 * areas
 
-    points = np.asarray(m.points)
-    connectivity = np.asarray(m.connectivity, dtype=int)
+    triangles = np.asarray(m.points)[np.asarray(m.connectivity, dtype=int)]
+    a, b, c = triangles[:, 0, :], triangles[:, 1, :], triangles[:, 2, :]
+    T = (a[:, None, :]
+         + xi[None, :, 0, None] * (b - a)[:, None, :]
+         + xi[None, :, 1, None] * (c - a)[:, None, :])
+    return T, normals, 2.0 * areas, weights
 
-    # Construct triangular faces
-    triangles = points[connectivity]
-    N = len(m.connectivity)
-    # triangles[i,j,:] #[triangle, point, :(whole point)]
 
-    sumE = 0.0
+def energy_3D(x: np.array, mesh: Mesh, Bond: float, center: np.array,
+              QuadRule: str = "strang3") -> float:
+    '''
+        E = area + (Bond/2) * integral of z^2 n_z dA, on the deformed mesh.
+    '''
+    T, normals, G, w = _triangle_geometry(x, mesh, center, QuadRule)
+    integrand = 1.0 + (Bond / 2.0) * normals[:, None, 2] * T[..., 2]**2
+    # master triangle has area 1/2 and the weights sum to 1
+    return float(np.sum(G * (integrand @ w)) / 2.0)
 
-    for i in range(N):
-        triang = triangles[i]
-        a = triang[0]
-        b = triang[1]
-        c = triang[2]
-        Gi = G[i]
-        normal = normals[i]
-        T = lambda x: x[0] * (b-a) + x[1] * (c-a) + a
-        f = lambda x:  Gi * (1 + (Bond / 2.0) * normal[2] * T(x)[2]**2)
-        sumE += Quadrature.integrate(f, "strang3")
 
-    return sumE
-
-def volume_3D(x: np.array, mesh: Mesh, center:np.array) -> float:
-    m = deformed_mesh(x, mesh, center)
-    
-    normals, areas = m.calculate_face_normals()
-    G = 2.0 * areas
-
-    points = np.asarray(m.points)
-    connectivity = np.asarray(m.connectivity, dtype=int)
-
-    # Construct triangular faces
-    triangles = points[connectivity]
-    N = len(m.connectivity)
-    # triangles[i,j,:] #[triangle, point, :(whole point)]
-
-    sumV = 0.0
-    for i in range(N):
-        triang = triangles[i]
-        a = triang[0]
-        b = triang[1]
-        c = triang[2]
-        Gi = G[i]
-        normal = normals[i]
-        T = lambda x: x[0] * (b-a) + x[1] * (c-a) + a
-        f = lambda x: Gi * np.dot(T(x), normal)
-        sumV += Quadrature.integrate(f, "strang3")
-
-    return sumV / 3.0
+def volume_3D(x: np.array, mesh: Mesh, center: np.array,
+              QuadRule: str = "strang3") -> float:
+    '''
+        V = (1/3) * integral of T . n dA (divergence theorem), on the deformed mesh.
+        The surface is open at the nozzle; this is only correct because the
+        nozzle lies on the plane z = 0 and T . n vanishes there.
+    '''
+    T, normals, G, w = _triangle_geometry(x, mesh, center, QuadRule)
+    integrand = np.einsum("fpk,fk->fp", T, normals)
+    return float(np.sum(G * (integrand @ w)) / 6.0)

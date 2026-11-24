@@ -114,7 +114,7 @@ f(u,s) = cos(theta)                                     =   cos(u[2])
 sessile:
 f(u,s) = cos(theta)                                     =   cos(u[2])
          sin(theta)                                         sin(u[2])
-         (p0 + density * g  * z) / gamma - sin(theta)/r     (p0 - density * g * u[1]) / gamma - sin(u[2])/u[0]
+         (p0 - density * g  * z) / gamma - sin(theta)/r     (p0 - density * g * u[1]) / gamma - sin(u[2])/u[0]
          pi * r * r * sin(theta)                            pi * u[0] * u[0] * sin(u[2])
          2 * pi * r                                         2 * pi * u[0]
 
@@ -233,13 +233,12 @@ def find_droplets(
         if arg < len(result.u[0,:]) - 1:
             u_arg = result.u[:, arg]
             u_rarg = result.u[:, arg+1]
-            if np.abs(u_arg[0] - u_rarg[0]) < const.EPSILON:
+            stop_idx = 0 if d_type == "pendant" else 2
+            if np.abs(u_arg[stop_idx] - u_rarg[stop_idx]) < const.EPSILON:
                 d = Droplet(r, z, V, S, a, d_type)
                 droplets.append(d)
             else:
-                stop_idx = 0 if d_type == "pendant" else 2
                 xi = (stop_val - u_rarg[stop_idx]) / (u_arg[stop_idx] - u_rarg[stop_idx])
-                u_interpol = xi * u_arg + (1.0 - xi) * u_rarg
                 u_interpol = xi * u_arg + (1.0 - xi) * u_rarg
                 r = np.hstack([r, u_interpol[0]])
                 z = np.hstack([z, u_interpol[1]])

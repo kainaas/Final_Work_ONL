@@ -58,7 +58,7 @@ if what_to_do == "vals" or what_to_do == "plot_lambda_V":
             A = shooting(V_adim, 1.3, 1.6, Bond, a)
         elif V_adim > 5.0:
             A = shooting(V_adim, 1.5, 1.9, Bond, a)
-        elif V_adim > 2.17221828749:
+        else:
             A = shooting(V_adim, 1.2, 1.9, Bond, a)
 
 

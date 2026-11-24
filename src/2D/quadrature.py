@@ -18,38 +18,29 @@ class Gauss_Legendre:
     Ak_3 = np.array([5/9, 8/9, 5/9])
 
     @classmethod
+    def _rule(cls, n_points_quad: int):
+        '''
+            Returns (points, weights) of the rule with n_points_quad points.
+        '''
+        if n_points_quad == 2:
+            return cls.points_2, cls.Ak_2
+        if n_points_quad == 3:
+            return cls.points_3, cls.Ak_3
+        raise ValueError(f"Gauss_Legendre supports 2 or 3 points, got {n_points_quad}.")
+
+    @classmethod
     def integrate(cls, f, n_points_quad: int = 3) -> float:
         '''
             Integrate f using n_points_quad
         '''
-        sum = 0.0
-        tmp = []
-        if n_points_quad == 2:
-            for i in range(2): tmp.append(f(cls.points_2[i]))
-            tmp = np.array(tmp)
-            sum = np.dot(cls.Ak_2, tmp)
-        elif n_points_quad == 3:
-            for i in range(3): tmp.append(f(cls.points_3[i]))
-            tmp = np.array(tmp)
-            sum = np.dot(cls.Ak_3, tmp)
-        return sum
+        points, weights = cls._rule(n_points_quad)
+        return np.dot(weights, np.array([f(p) for p in points]))
 
     @classmethod
-    def integrate_vector(cls, f, n_points_quad: int = 3) ->float:
+    def integrate_vector(cls, f, n_points_quad: int = 3) -> float:
         '''
             Integrate f using n_points_quad. f must return a 1 x num_points_used array where each collumn
             is the function in a point.
         '''
-        sum = 0.0
-        tmp = []
-        if n_points_quad == 2:
-            for i in range(2): tmp.append(f(cls.points_2[i]))
-            tmp = np.vstack(tmp)
-            integral_array = np.dot(cls.Ak_2, tmp)
-            sum = np.sum(integral_array)
-        elif n_points_quad == 3:
-            for i in range(3): tmp.append(f(cls.points_3[i]))
-            tmp = np.vstack(tmp)
-            integral_array = np.dot(cls.Ak_3, tmp)
-            sum = np.sum(integral_array)
-        return sum
+        points, weights = cls._rule(n_points_quad)
+        return np.sum(np.dot(weights, np.vstack([f(p) for p in points])))
