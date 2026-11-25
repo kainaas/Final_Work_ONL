@@ -81,10 +81,10 @@ class Abertura(Scene):
     def construct(self):
         d = carregar("crescendo")
         perfis = d["perfis"][:-1]
-        esc, origem = 0.75, UP * 2.2
+        esc, origem = 0.75, UP * 2.2 + RIGHT * 3.2
         t = ValueTracker(0.0)
         gota = always_redraw(lambda: gota_2d(interpola(perfis, t.get_value()), esc, origem))
-        nome = Text("Qual é a forma\nde uma gota?", font_size=52, line_spacing=1.2).to_edge(LEFT, buff=1.0)
+        nome = Text("Qual é a forma\nde uma gota?", font_size=52, line_spacing=1.2).to_edge(LEFT, buff=0.8)
         self.add(bico_2d(esc, origem), gota)
         self.play(Write(nome), run_time=1.5)
         self.play(t.animate.set_value(len(perfis) - 1), run_time=8, rate_func=smooth)
@@ -131,7 +131,7 @@ class CaboDeGuerra(Scene):
         d = carregar("cabo_de_guerra")
         formas, partes, fatores = d["formas"], d["partes"], d["fatores"]
         sup, grav, tot = partes[:, 0], partes[:, 1], partes[:, 2]
-        esc, origem = 0.6, LEFT * 3.5 + UP * 2.3
+        esc, origem = 0.5, LEFT * 3.7 + UP * 3.0
         t = ValueTracker(float(np.argmin(np.abs(fatores - 1.0))))
         self.add(bico_2d(esc, origem))
         gota = always_redraw(lambda: gota_2d(interpola(formas, t.get_value()), esc, origem))
@@ -145,19 +145,19 @@ class CaboDeGuerra(Scene):
         ponto = always_redraw(lambda: Dot(eixos.c2p(*self._ponto(fatores, tot, t.get_value())), color=WHITE))
 
         # barras: pele (sobe) e altura (desce)
-        base = LEFT * 0.6 + DOWN * 2.8
+        base = LEFT * 4.6 + DOWN * 3.0
         def barras():
             i = t.get_value()
             s = np.interp(i, np.arange(len(sup)), sup) - sup.min() + 0.3
             g = -(np.interp(i, np.arange(len(grav)), grav) - grav.max()) + 0.3
-            b1 = Rectangle(width=0.5, height=0.25 * s, fill_color=AGUA, fill_opacity=0.9, stroke_width=0)
-            b2 = Rectangle(width=0.5, height=0.25 * g, fill_color=DESTAQUE, fill_opacity=0.9, stroke_width=0)
+            b1 = Rectangle(width=0.6, height=0.45 * s, fill_color=AGUA, fill_opacity=0.9, stroke_width=0)
+            b2 = Rectangle(width=0.6, height=0.45 * g, fill_color=DESTAQUE, fill_opacity=0.9, stroke_width=0)
             b1.move_to(base, aligned_edge=DOWN)
-            b2.move_to(base + RIGHT * 0.8, aligned_edge=DOWN)
+            b2.move_to(base + RIGHT * 1.8, aligned_edge=DOWN)
             return VGroup(b1, b2)
         legenda = VGroup(Text("pele", font_size=22, color=AGUA), Text("gravidade", font_size=22, color=DESTAQUE))
         legenda[0].next_to(base, DOWN, buff=0.15)
-        legenda[1].next_to(base + RIGHT * 0.8, DOWN, buff=0.15)
+        legenda[1].next_to(base + RIGHT * 1.8, DOWN, buff=0.15)
 
         self.play(Create(eixos), FadeIn(rot_x), FadeIn(rot_y))
         self.add(always_redraw(barras), legenda)
@@ -167,7 +167,7 @@ class CaboDeGuerra(Scene):
         self.play(t.animate.set_value(float(np.argmin(tot))), run_time=3)
         seta = Arrow(eixos.c2p(fatores[np.argmin(tot)], tot.min() + 1.6), eixos.c2p(fatores[np.argmin(tot)], tot.min() + 0.2),
                      color=WHITE, buff=0)
-        self.play(GrowArrow(seta), Write(Text("equilíbrio", font_size=26).next_to(seta, UP, buff=0.1)))
+        self.play(GrowArrow(seta), FadeIn(Text("equilíbrio", font_size=26).next_to(seta, UP, buff=0.1)))
         self.wait(2)
 
     @staticmethod
@@ -184,8 +184,8 @@ class DescendoOMorro(Scene):
     def construct(self):
         eixos = Axes(x_range=[-3, 3, 1], y_range=[-1, 5, 1], x_length=10, y_length=5, tips=False,
                      axis_config={"include_ticks": False}).shift(DOWN * 0.5)
-        f = lambda x: 0.25 * x**4 - 0.6 * x**2 + 0.35 * x + 1.5    # noqa: E731
-        df = lambda x: x**3 - 1.2 * x + 0.35                         # noqa: E731
+        f = lambda x: 0.35 * (x + 0.6)**2 + 0.04 * (x + 0.6)**4 + 0.3   # noqa: E731
+        df = lambda x: 0.7 * (x + 0.6) + 0.16 * (x + 0.6)**3           # noqa: E731
         morro = eixos.plot(f, x_range=[-2.4, 2.4], color=GREEN_C, stroke_width=5)
         neblina = Rectangle(width=14, height=8, fill_color=FUNDO, fill_opacity=0.55, stroke_width=0)
         self.play(Create(eixos), Create(morro))
@@ -194,11 +194,11 @@ class DescendoOMorro(Scene):
         bola = Dot(eixos.c2p(x, f(x)), radius=0.14, color=DESTAQUE)
         self.add(bola)
         for _ in range(12):
-            novo = x - 0.18 * df(x)
+            novo = x - 0.35 * df(x)
             self.play(bola.animate.move_to(eixos.c2p(novo, f(novo))), run_time=0.45)
             x = novo
         self.play(FadeOut(neblina))
-        regra = Text("regra: a quantidade de água não muda", font_size=32, color=DESTAQUE).to_edge(UP)
+        regra = Text("regra: a quantidade de água não muda", font_size=32, color=DESTAQUE).to_edge(DOWN)
         self.play(Write(regra))
         self.wait(2)
 
@@ -213,9 +213,11 @@ class TrilhaRestrita(Scene):
                                      stroke_width=1.5, stroke_opacity=0.6) for c in range(-12, 6, 2)])
         trilha = plano.plot_parametric_curve(lambda s: np.array([2 * np.cos(s), np.sin(s)]), t_range=[0, TAU],
                                              color=GREEN_C, stroke_width=6)
-        rot = Text("a trilha (restrição)", font_size=26, color=GREEN_C).next_to(plano.c2p(2, 1), UR, buff=0.1)
+        rot = Text("a trilha (restrição)", font_size=26, color=GREEN_C).next_to(plano.c2p(0, 1), UP, buff=0.15)
         alvo = Star(color=DESTAQUE, fill_opacity=1).scale(0.18).move_to(plano.c2p(-np.sqrt(2), -np.sqrt(2) / 2))
-        desce = Text("mais baixo  →", font_size=24, color=GREY_B).rotate(-np.arctan(2) - PI / 2).move_to(plano.c2p(-5.5, 1.5))
+        desce = VGroup(Arrow(plano.c2p(-4.5, 0.5), plano.c2p(-5.5, -1.5), color=GREY_B, buff=0),
+                       Text("desce", font_size=24, color=GREY_B))
+        desce[1].next_to(desce[0], LEFT, buff=0.1)
         self.play(FadeIn(plano), Create(niveis), FadeIn(desce))
         self.play(Create(trilha), FadeIn(rot))
         bola = Dot(plano.c2p(*it[0]), radius=0.12, color=AGUA)
@@ -279,7 +281,7 @@ class CrescendoAteCair(Scene):
         k = np.arange(len(perfis))
         self.add(bico_2d(esc, origem))
         gota = always_redraw(lambda: gota_2d(interpola(perfis, t.get_value()), esc, origem))
-        rot = Text("volume", font_size=30).move_to(RIGHT * 2 + UP * 2)
+        rot = Text("volume", font_size=30).move_to(RIGHT * 0.9 + UP * 2.6)
         num = always_redraw(lambda: DecimalNumber(np.interp(t.get_value(), k, volumes), num_decimal_places=1,
                                                   font_size=48, color=AGUA).next_to(rot, DOWN))
         self.add(gota, rot, num)
@@ -287,7 +289,7 @@ class CrescendoAteCair(Scene):
         limite = Text("volume máximo", font_size=30, color=DESTAQUE).next_to(num, DOWN, buff=0.4)
         self.play(FadeIn(limite), Flash(gota.get_bottom(), color=DESTAQUE))
         self.wait()
-        origem2 = RIGHT * 3.6 + UP * 2.8
+        origem2 = RIGHT * 4.0 + UP * 2.8
         outra = gota_2d(solta, esc, origem2, suave=False, cor=DESTAQUE)
         self.play(FadeIn(bico_2d(esc, origem2)), Create(outra), run_time=2)
         self.play(FadeIn(Text("menos energia: a gota se solta", font_size=26, color=DESTAQUE)
@@ -403,8 +405,8 @@ class Fechamento(Scene):
         self.wait(3)
         self.play(FadeOut(itens))
         d = carregar("otimizacao_2d")
-        esc, origem = 0.75, UP * 2.2 + RIGHT * 3
+        esc, origem = 0.7, UP * 2.0 + RIGHT * 4.6
         self.play(FadeIn(bico_2d(esc, origem)), DrawBorderThenFill(gota_2d(d["edo"], esc, origem)))
-        fim = Text("A natureza também otimiza.", font_size=44, color=DESTAQUE).to_edge(LEFT, buff=0.8)
+        fim = Text("A natureza também otimiza.", font_size=40, color=DESTAQUE).to_edge(LEFT, buff=0.6)
         self.play(Write(fim))
         self.wait(3)
