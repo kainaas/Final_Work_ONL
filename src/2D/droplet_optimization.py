@@ -60,8 +60,13 @@ def find_droplet_optimization(
     Bond: float,
     points_num: int,
     constraints: Optional[list] = None,
-    verbose: bool = True
+    verbose: bool = True,
+    callback=None
 ):
+    '''
+        callback: if given, called after each SLSQP iteration with the
+        profile points (2, N), rows (r, z), from the nozzle to the apex.
+    '''
     if constraints is None:
         constraints = []
     else:
@@ -123,6 +128,8 @@ def find_droplet_optimization(
         method='SLSQP', 
         constraints=constraints, 
         bounds=bound, 
+        callback=None if callback is None else
+            (lambda xk: callback(deform_droplet(xk, Lpoints0, center)[0])),
         options={
             'maxiter': 10000,
             'ftol': 1e-12,
