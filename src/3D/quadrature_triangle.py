@@ -152,3 +152,105 @@ def volume_3D(x: np.array, mesh: Mesh, center: np.array,
     T, normals, G, w = _triangle_geometry(x, mesh, center, QuadRule)
     integrand = np.einsum("fpk,fk->fp", T, normals)
     return float(np.sum(G * (integrand @ w)) / 6.0)
+
+
+# ---------------------------------------------------------------------------
+# exact gradients with respect to the radial displacements x
+# ---------------------------------------------------------------------------
+
+def _free_ids_and_directions(x: np.array, mesh: Mesh, center: np.array):
+    '''
+        Free vertex ids and the direction d_i = P_i - center along which each
+        one moves (dP_i/dx_i = d_i).
+    '''
+    x = np.asarray(x, dtype=float).ravel()
+    if mesh.free_ids is None:
+        ids = np.arange(len(x))
+    else:
+        ids = np.asarray(mesh.free_ids, dtype=int)
+    points0 = np.asarray(mesh.points, dtype=float)
+    return ids, points0[ids] - np.asarray(center, dtype=float).reshape(1, 3)
+
+
+def _chain_rule(grad_a, grad_b, grad_c, x, mesh, center):
+    '''
+        Adds the per-triangle gradients with respect to the vertices a, b, c
+        into a gradient per vertex and projects it on the free directions.
+    '''
+    faces = np.asarray(mesh.connectivity, dtype=int)
+    grad_points = np.zeros((mesh.num_points, 3))
+    np.add.at(grad_points, faces[:, 0], grad_a)
+    np.add.at(grad_points, faces[:, 1], grad_b)
+    np.add.at(grad_points, faces[:, 2], grad_c)
+    ids, d = _free_ids_and_directions(x, mesh, center)
+    return np.einsum("ik,ik->i", grad_points[ids], d)
+
+
+def _deformed_triangles(x, mesh, center):
+    m = deformed_mesh(x, mesh, center)
+    tri = np.asarray(m.points)[np.asarray(m.connectivity, dtype=int)]
+    return tri[:, 0, :], tri[:, 1, :], tri[:, 2, :]
+
+
+def grad_energy_3D(x: np.array, mesh: Mesh, Bond: float, center: np.array,
+                   QuadRule: str = "strang3") -> np.ndarray:
+    '''
+        Exact gradient of energy_3D with respect to x.
+
+        With u = b - a, v = c - a and N = u x v (= 2 A n), each triangle
+        contributes |N|/2 + (Bond/4) N_z S, where S = sum_p w_p T_z(xi_p)^2.
+        The quadrature is applied to the same integrand as in energy_3D, so
+        this is the derivative of the discrete energy (for any rule).
+    '''
+    xi, w = _rule(QuadRule)
+    a, b, c = _deformed_triangles(x, mesh, center)
+    u, v = b - a, c - a
+    N = np.cross(u, v)
+    normN = np.linalg.norm(N, axis=1)
+    n = N / normN[:, None]
+
+    # |N|/2: d|N| = n . (du x v + u x dv)
+    gb_area = 0.5 * np.cross(v, n)
+    gc_area = 0.5 * np.cross(n, u)
+    ga_area = -(gb_area + gc_area)
+
+    # N_z: same formula with n replaced by e_z
+    ez = np.array([0.0, 0.0, 1.0])
+    gb_Nz = np.cross(v, ez)
+    gc_Nz = np.cross(ez, u)
+    ga_Nz = -(gb_Nz + gc_Nz)
+
+    # S = sum_p w_p T_z^2, T_z = (1 - xi0 - xi1) a_z + xi0 b_z + xi1 c_z
+    l0 = 1.0 - xi[:, 0] - xi[:, 1]
+    Tz = (np.outer(a[:, 2], l0) + np.outer(b[:, 2], xi[:, 0]) + np.outer(c[:, 2], xi[:, 1]))
+    S = (Tz**2) @ w
+    dS_da = (2.0 * Tz * l0) @ w
+    dS_db = (2.0 * Tz * xi[:, 0]) @ w
+    dS_dc = (2.0 * Tz * xi[:, 1]) @ w
+
+    k = Bond / 4.0
+    Nz = N[:, 2]
+
+    def grav(gNz, dS):
+        g = k * S[:, None] * gNz
+        g[:, 2] += k * Nz * dS
+        return g
+
+    return _chain_rule(ga_area + grav(ga_Nz, dS_da),
+                       gb_area + grav(gb_Nz, dS_db),
+                       gc_area + grav(gc_Nz, dS_dc), x, mesh, center)
+
+
+def grad_volume_3D(x: np.array, mesh: Mesh, center: np.array,
+                   QuadRule: str = "strang3") -> np.ndarray:
+    '''
+        Exact gradient of volume_3D with respect to x.
+
+        On a flat triangle T . N is constant (u . N = v . N = 0), so for any
+        rule whose weights sum to 1 the volume is sum a . (b x c) / 6 and its
+        derivatives are (b x c)/6, (c x a)/6 and (a x b)/6.
+    '''
+    _rule(QuadRule)  # only validates the name
+    a, b, c = _deformed_triangles(x, mesh, center)
+    return _chain_rule(np.cross(b, c) / 6.0, np.cross(c, a) / 6.0,
+                       np.cross(a, b) / 6.0, x, mesh, center)

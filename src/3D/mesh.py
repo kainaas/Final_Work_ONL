@@ -16,7 +16,12 @@ class Mesh:
 
         # IDs of vertices on the spherical cut boundary
         self.cut_boundary = []
+        # IDs of the vertices on the nozzle (always fixed)
+        self.nozzle_boundary = []
         self.has_nozzle = False
+        # IDs of the vertices that move (the optimization variables);
+        # None means "the first len(x) vertices"
+        self.free_ids = None
 
     def add_point(self, p):
         self.points.append(np.asarray(p, dtype=float))
@@ -73,6 +78,8 @@ class Mesh:
 
         # Save spherical cut boundary
         mesh.cut_boundary = list(range(num_sectors))
+        # every vertex of the spherical cap moves (until a nozzle is chosen)
+        mesh.free_ids = list(range(mesh.num_points))
 
         # Generate triangles
         for i in range(num_stacks - 1):
@@ -297,6 +304,22 @@ class Mesh:
         return self
 
 
+    def use_cut_as_nozzle(self):
+        """
+        Circular nozzle: the ring of the spherical cut is itself the edge of
+        the nozzle, so no collar is needed. The ring vertices become fixed
+        (the 3D analogue of x_0 = 0 in the axisymmetric version) and only
+        the vertices below it are variables.
+        """
+        if not self.cut_boundary:
+            raise ValueError("No spherical cut boundary found.")
+
+        ring = set(self.cut_boundary)
+        self.nozzle_boundary = list(self.cut_boundary)
+        self.free_ids = [i for i in range(self.num_points) if i not in ring]
+        self.has_nozzle = True
+        return self
+
     def calculate_face_normals(self):
         """
         Calculate unit normals and areas for every triangle.
@@ -330,21 +353,33 @@ class Mesh:
 
 
 
-def deformed_mesh(x: np.array, mesh: Mesh, center:np.array):
-    x = np.asarray(x, dtype=float).reshape(1, -1)
-    N = x.shape[1]
+def deformed_mesh(x: np.array, mesh: Mesh, center: np.array):
+    """
+    Moves each free vertex along the line that joins it to `center`:
+        P_i(x) = P_i + x_i (P_i - center).
+    The free vertices are mesh.free_ids (or the first len(x) vertices if the
+    mesh does not define them); every other vertex stays where it is.
+    """
+    x = np.asarray(x, dtype=float).ravel()
+
+    if mesh.free_ids is None:
+        ids = np.arange(len(x))
+    else:
+        ids = np.asarray(mesh.free_ids, dtype=int)
+        if len(ids) != len(x):
+            raise ValueError(f"x has {len(x)} entries but the mesh has {len(ids)} free vertices.")
 
     m = Mesh()
     m.connectivity = mesh.connectivity.copy()
-    m.cut_boundary = mesh.cut_boundary.copy()
-    if mesh.has_nozzle:
-        m.nozzle_boundary = mesh.nozzle_boundary.copy()
-    m.points = mesh.points.copy()
+    m.cut_boundary = list(mesh.cut_boundary)
+    m.nozzle_boundary = list(mesh.nozzle_boundary)
+    m.has_nozzle = mesh.has_nozzle
+    m.free_ids = None if mesh.free_ids is None else list(mesh.free_ids)
     m.num_points = mesh.num_points
-    
-    points = np.asarray(m.points)
 
-    points[:N, :] = (points[:N, :].T + np.vstack([x,x,x]) * (points[:N, :].T - np.asarray(center).reshape(3,1))).T
+    points = np.array(mesh.points, dtype=float)
+    c = np.asarray(center, dtype=float).reshape(1, 3)
+    points[ids] += x[:, None] * (points[ids] - c)
 
     m.points = list(points)
 

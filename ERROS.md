@@ -154,3 +154,18 @@ Não são erros confirmados; ficam como sugestões.
 - **Organização:** imports com `*`, `sys.path` relativo ao diretório atual em
   `run/`, ausência de `requirements.txt`, pasta `imgs/` que não existe (usada
   em `pendant.py`).
+
+## Mudanças na versão 3D (bico circular, parede, gradiente)
+
+- `fix_boundary` foi removido. Agora os vértices variáveis ficam em
+  `Mesh.free_ids` e só os vértices do bico são fixos: no bico circular o anel
+  do corte é a própria borda do bico (equivalente a `x[0] = 0` do 2D); no
+  bico quadrado o anel continua livre e um colar o liga ao quadrado.
+- A calota inicial tem exatamente o volume da gota: `initial_mesh` corrige
+  `h` por `brentq` sobre o volume da própria malha (antes a esfera era
+  deslocada `R/4` para baixo e o volume inicial ficava maior que `V0`).
+- Os vértices passam a se mover em relação ao centro real da esfera.
+- `grad_energy_3D` e `grad_volume_3D` dão os gradientes exatos, passados ao
+  SLSQP em `jac=` (malha 8×16: de ~10 s para ~0,05 s). Isso resolve a
+  pendência "Desempenho do 3D" acima.
+- `wall_constraint` / `wall=`: parede plana `x <= w` como restrição linear.

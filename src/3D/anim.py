@@ -7,7 +7,7 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 
 def run_simulations(V_initial, V_final, num_frames, Bond, num_stacks,
-                    num_sectors, nozzle, fix_boundary, QuadRule):
+                    num_sectors, nozzle, QuadRule, wall=None):
     '''
         Roda uma simulação por quadro, com o volume variando linearmente
         de V_initial até V_final. Retorna (volumes, lista de malhas).
@@ -22,7 +22,7 @@ def run_simulations(V_initial, V_final, num_frames, Bond, num_stacks,
         print(f"[{k + 1}/{num_frames}] V = {V:.4f}")
         m = find_droplet_optimization_3d(
             V, Bond, num_stacks, num_sectors, nozzle,
-            fix_boundary=fix_boundary,
+            wall=wall,
             QuadRule=QuadRule,
             verbose=False,
         )
@@ -137,6 +137,12 @@ if __name__ == "__main__":
                         help="tempo entre quadros em ms (menor = mais rápido)")
     parser.add_argument("--fps", type=float, default=None,
                         help="quadros por segundo; se dado, substitui --interval")
+    parser.add_argument("--nozzle", choices=["circle", "square"], default="circle",
+                        help="bico circular de raio 1 ou quadrado [-1, 1]^2")
+    parser.add_argument("--wall", type=float, default=None,
+                        help="parede plana em x = WALL (1 encosta no bico circular)")
+    parser.add_argument("--stacks", type=int, default=12, help="anéis da malha")
+    parser.add_argument("--sectors", type=int, default=24, help="setores da malha")
     args = parser.parse_args()
 
     if args.load:
@@ -148,21 +154,23 @@ if __name__ == "__main__":
         # mesmos parâmetros físicos do test.py
         gamma = 0.0728      # N/m
         density = 1000.0    # kg/m³
-        a = np.sqrt(2) * 0.001
+        a = 0.001           # raio do bico circular (m)
         g = 9.81
         Bond = a**2 * density * g / gamma
 
-        num_stacks = 8
-        num_sectors = 16
+        num_stacks = args.stacks
+        num_sectors = args.sectors
         QuadRule = "strang3"
-        fix_boundary = False
 
-        nozzle = np.array([
-            [1.0, 1.0],
-            [1.0, -1.0],
-            [-1.0, -1.0],
-            [-1.0, 1.0]
-        ])
+        if args.nozzle == "circle":
+            nozzle = "circle"
+        else:
+            nozzle = np.array([
+                [1.0, 1.0],
+                [1.0, -1.0],
+                [-1.0, -1.0],
+                [-1.0, 1.0]
+            ])
 
         volumes, meshes = run_simulations(
             args.v_initial, args.v_final, args.frames,
@@ -170,15 +178,16 @@ if __name__ == "__main__":
             num_stacks=num_stacks,
             num_sectors=num_sectors,
             nozzle=nozzle,
-            fix_boundary=fix_boundary,
             QuadRule=QuadRule,
+            wall=args.wall,
         )
 
         save_frames(
             args.npz, volumes, meshes,
             Bond=Bond, nozzle=nozzle,
             num_stacks=num_stacks, num_sectors=num_sectors,
-            fix_boundary=fix_boundary, QuadRule=QuadRule,
+            QuadRule=QuadRule,
+            wall=np.nan if args.wall is None else args.wall,
         )
 
         points = np.stack([np.asarray(m.points) for m in meshes])

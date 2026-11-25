@@ -1,5 +1,4 @@
 """Testes da versão 3D unificada em malha triangular (src/3D)."""
-from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -48,23 +47,72 @@ def test_regra_desconhecida():
         energy_3D(np.zeros(N), mesh, 1.0, c, "gauss99")
 
 
-def _captura_minimize(captured):
-    def minimize(fun, x0, constraints=(), bounds=None, **kwargs):
-        captured.append(bounds)
-        return SimpleNamespace(x=np.zeros_like(x0), success=True, message="fake",
-                               nit=0, fun=fun(np.zeros_like(x0)))
-    return minimize
+@pytest.mark.parametrize("nozzle", ["circle", NOZZLE])
+def test_volume_inicial_igual_ao_da_gota(nozzle):
+    """A calota inicial (com o colar, no bico quadrado) já tem o volume pedido."""
+    from optimization_3d import initial_mesh
+    from quadrature_triangle import volume_3D
+    for V in (0.5, 5.0, 20.0):
+        mesh, c = initial_mesh(V, 6, 12, nozzle)
+        assert volume_3D(np.zeros(len(mesh.free_ids)), mesh, c) == pytest.approx(V, rel=1e-10)
 
 
-@pytest.mark.parametrize("fix", [False, True])
-def test_fix_boundary_prende_linha_de_contato(monkeypatch, fix):
-    import optimization_3d as o3
-    captured = []
-    monkeypatch.setattr(o3.optm, "minimize", _captura_minimize(captured))
-    o3.find_droplet_optimization_3d(1.0, 0.1, 4, 8, NOZZLE, fix_boundary=fix, verbose=False)
-    b = captured[0]
-    ring = list(range(8))  # cut_sphere numera o anel do corte primeiro
-    if fix:
-        assert np.all(b.lb[ring] == 0.0) and np.all(b.ub[ring] == 0.0)
-    else:
-        assert np.all(b.lb[ring] < 0.0) and np.all(np.isinf(b.ub[ring]))
+def test_bico_circular_prende_so_o_bico():
+    """No bico circular o anel do corte é a borda do bico (fixo, em z = 0, raio 1);
+    no quadrado o anel do corte continua livre."""
+    from optimization_3d import initial_mesh
+    mesh, c = initial_mesh(5.0, 6, 12, "circle")
+    P = np.asarray(mesh.points)
+    ring = mesh.cut_boundary
+    assert mesh.nozzle_boundary == ring
+    assert not set(ring) & set(mesh.free_ids)
+    assert np.allclose(P[ring, 2], 0.0) and np.allclose(np.hypot(P[ring, 0], P[ring, 1]), 1.0)
+    assert len(mesh.free_ids) == mesh.num_points - 12
+
+    mesh, c = initial_mesh(5.0, 6, 12, NOZZLE)
+    assert set(mesh.cut_boundary) <= set(mesh.free_ids)
+    assert not set(mesh.nozzle_boundary) & set(mesh.free_ids)
+
+
+@pytest.mark.parametrize("nozzle", ["circle", NOZZLE])
+@pytest.mark.parametrize("rule", ["strang3", "strang7", "strang10"])
+def test_gradiente_analitico(nozzle, rule):
+    """Gradientes exatos da energia e do volume conferem com diferenças centrais."""
+    from optimization_3d import initial_mesh
+    from quadrature_triangle import energy_3D, volume_3D, grad_energy_3D, grad_volume_3D
+    mesh, c = initial_mesh(5.0, 4, 8, nozzle)
+    n = len(mesh.free_ids)
+    x = np.random.default_rng(2).uniform(-0.3, 0.3, n)
+    e = 1e-6
+    I = np.eye(n)
+    fd_E = [(energy_3D(x + e * I[i], mesh, 0.3, c, rule) - energy_3D(x - e * I[i], mesh, 0.3, c, rule)) / (2 * e)
+            for i in range(n)]
+    fd_V = [(volume_3D(x + e * I[i], mesh, c, rule) - volume_3D(x - e * I[i], mesh, c, rule)) / (2 * e)
+            for i in range(n)]
+    assert np.allclose(grad_energy_3D(x, mesh, 0.3, c, rule), fd_E, rtol=1e-6, atol=1e-7)
+    assert np.allclose(grad_volume_3D(x, mesh, c, rule), fd_V, rtol=1e-6, atol=1e-7)
+
+
+def test_bico_circular_aproxima_o_axissimetrico():
+    """Com bico circular, a gota 3D se aproxima da gota axissimétrica (EDO)
+    quando a malha é refinada."""
+    from optimization_3d import find_droplet_optimization_3d
+    B = 0.134753
+    d_edo = 1.69961   # altura da gota de volume 5 pela EDO (tiro), B = 0,134753
+    erros = []
+    for ns in ((6, 12), (12, 24)):
+        m = find_droplet_optimization_3d(5.0, B, *ns, "circle", verbose=False)
+        erros.append(abs(-np.asarray(m.points)[:, 2].min() - d_edo))
+    assert erros[1] < erros[0] and erros[1] < 0.02
+
+
+def test_parede_respeitada():
+    """A parede x <= 1 (encostada no bico circular) é respeitada por todos os
+    vértices e deixa a gota não simétrica."""
+    from optimization_3d import find_droplet_optimization_3d
+    m, res, _, _ = find_droplet_optimization_3d(5.0, 0.134753, 8, 16, "circle", wall=1.0,
+                                                verbose=False, return_result=True)
+    P = np.asarray(m.points)
+    assert res.success
+    assert P[:, 0].max() <= 1.0 + 1e-9
+    assert P[:, 0].min() < -1.0 - 1e-3
