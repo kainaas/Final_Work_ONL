@@ -13,7 +13,8 @@ def _fake_minimize(captured):
     def minimize(fun, x0, constraints=(), **kwargs):
         captured.append(list(constraints))
         return SimpleNamespace(x=np.zeros_like(x0), success=True, message="fake",
-                               nit=0, fun=fun(np.zeros_like(x0)), jac=np.zeros_like(x0))
+                               nit=0, fun=fun(np.zeros_like(x0)), jac=np.zeros_like(x0),
+                               multipliers=np.zeros(len(constraints)))
     return minimize
 
 

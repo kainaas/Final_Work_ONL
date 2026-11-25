@@ -19,7 +19,7 @@ plot_mesh(d)
 d = find_droplet_optimization_3d(V_adim, Bond, 12, 24, "circle", wall=1.0)
 plot_mesh(d)
 
-# bico quadrado [-1, 1]^2 (um colar de triângulos liga a calota ao quadrado)
+# bico quadrado [-1, 1]^2 (o topo da calota é esticado até o anel do corte ficar sobre o quadrado)
 nozzle = np.array([
     [1.0, 1.0],
     [1.0, -1.0],

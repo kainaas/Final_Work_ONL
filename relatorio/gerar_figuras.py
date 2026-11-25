@@ -15,7 +15,6 @@ import contextlib
 import io
 import json
 import platform
-import re
 import sys
 import time
 import warnings
@@ -111,11 +110,10 @@ def gota_tiro(V):
 
 def gota_slsqp(V, N):
     t = time.perf_counter()
-    (gota, lam), saida = calado(find_droplet_optimization, V, A_BICO, BOND, N, verbose=False)
+    gota, lam, res = find_droplet_optimization(V, A_BICO, BOND, N, verbose=False, return_result=True)
     dt = time.perf_counter() - t
-    it = re.search(r"Iterations:\s*(\d+)", saida)
     return {"d": float(gota.get_height()), "lam": float(lam), "tempo": dt,
-            "iteracoes": int(it.group(1)) if it else None,
+            "iteracoes": int(res.nit), "sucesso": bool(res.success),
             "r": gota.r.tolist(), "z": gota.z.tolist()}
 
 

@@ -49,7 +49,7 @@ def test_regra_desconhecida():
 
 @pytest.mark.parametrize("nozzle", ["circle", NOZZLE])
 def test_volume_inicial_igual_ao_da_gota(nozzle):
-    """A calota inicial (com o colar, no bico quadrado) já tem o volume pedido."""
+    """A calota inicial (com o topo esticado, no bico quadrado) já tem o volume pedido."""
     from optimization_3d import initial_mesh
     from quadrature_triangle import volume_3D
     for V in (0.5, 5.0, 20.0):
@@ -58,8 +58,8 @@ def test_volume_inicial_igual_ao_da_gota(nozzle):
 
 
 def test_bico_circular_prende_so_o_bico():
-    """No bico circular o anel do corte é a borda do bico (fixo, em z = 0, raio 1);
-    no quadrado o anel do corte continua livre."""
+    """O anel do corte é a borda do bico e fica fixo: no bico circular, em z = 0
+    com raio 1; no quadrado, sobre o contorno do quadrado."""
     from optimization_3d import initial_mesh
     mesh, c = initial_mesh(5.0, 6, 12, "circle")
     P = np.asarray(mesh.points)

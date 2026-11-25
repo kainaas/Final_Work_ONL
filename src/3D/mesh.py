@@ -547,36 +547,15 @@ def plot_normals(mesh, stride=1, scale=0.15):
 
 
 if __name__ == "__main__":
-    # Sphere
-    mesh = Mesh.cut_sphere(
-        r=1.0,
-        num_sectors=16,
-        num_stacks=8,
-        min_theta=np.pi / 2.0,
-        z_center= -0.05
-    )
-
-
-    N= len(mesh.points)
-    x = np.full(N, -0.5)
-
-    # Arbitrary nozzle contour (counterclockwise)
-    nozzle = np.array([
-        [1.0, 1.0],
-        [1.0, -1.0],
-        [-1.0, -1.0],
-        [-1.0, 1.0]
-    ])
-
-
-    
-    # Attach nozzle
-    mesh.attach_nozzle(
-        nozzle_contour=nozzle,
-        z_nozzle=0.0,
-        nozzle_length=0.0
-    )
+    # calota cortada em z = 0 com o topo esticado até o bico quadrado [-1, 1]^2
+    h = 1.0
+    r = np.sqrt(1 + h**2)
+    mesh = Mesh.cut_sphere(r=r, num_sectors=24, num_stacks=12,
+                           min_theta=np.arccos(h / r), z_center=-h)
+    nozzle = np.array([[1.0, 1.0], [1.0, -1.0], [-1.0, -1.0], [-1.0, 1.0]])
+    mesh.fit_cut_to_polygon(nozzle, blend_stacks=4)
     plot_mesh(mesh)
 
-    m = deformed_mesh(x, mesh, point(0.0,0.0, -0.05))
-    plot_mesh(m)
+    # cada vértice livre se move sobre a reta que o liga ao centro da esfera
+    x = np.full(len(mesh.free_ids), 0.3)
+    plot_mesh(deformed_mesh(x, mesh, point(0.0, 0.0, -h)))

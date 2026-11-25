@@ -5,6 +5,7 @@ path.append("./../src/2D")
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.optimize as optm
+from scipy.optimize._numdiff import approx_derivative
 from tabulate import tabulate
 
 from droplet_optimization import *
@@ -113,7 +114,7 @@ if what_to_do == "vals" or what_to_do == "plot_lambda_V":
     print(diff_d)
     print(diff_lambda)
 
-    header = ["$\hat{V} / \hat{V}^*$", "\hat{d} EDO", "\hat{d} min", "\hat{\lambda} EDO", "\hat{\lambda} min"]
+    header = [r"$\hat{V} / \hat{V}^*$", r"\hat{d} EDO", r"\hat{d} min", r"\hat{\lambda} EDO", r"\hat{\lambda} min"]
 
     lines = []
     for i in range(3):

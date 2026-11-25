@@ -21,9 +21,9 @@ import numpy as np
 import scipy.optimize as optm
 
 from droplet import Droplet
-from droplet_optimization import (deform_droplet, potential_energy,
-                                  surface_droplet, volume_droplet)
-from objects import Arc, Contour, point
+from droplet_optimization import (deform_droplet, potential_energy,  # noqa: F401
+                                  surface_droplet, volume_droplet,
+                                  initial_profile, profile_energy, profile_volume)
 
 
 def _vector(fun):
@@ -283,89 +283,6 @@ def augmented_lagrangian(
 # ---------------------------------------------------------------------------
 # 2D (axisymmetric) pendant droplet
 # ---------------------------------------------------------------------------
-
-def profile_energy(points: np.ndarray, Bond: float):
-    '''
-        Energy of the polygonal profile points (2, N), rows (r, z), with the
-        same normalization as potential_energy (energy / pi):
-
-            sum over segments of  d (r1 + r2) + (Bond/12) (r2 - r1) Q
-            Q = r1 (3 z1^2 + 2 z1 z2 + z2^2) + r2 (z1^2 + 2 z1 z2 + 3 z2^2)
-
-        where d is the segment length. This is the exact integral of the
-        integrand of potential_energy on each segment (the 3-point
-        Gauss-Legendre rule is exact for it), so both agree up to rounding.
-
-        Returns (E, dE/dpoints), the gradient with shape (2, N).
-    '''
-    r1, z1, r2, z2 = points[0, :-1], points[1, :-1], points[0, 1:], points[1, 1:]
-    dr, dz = r2 - r1, z2 - z1
-    d = np.hypot(dr, dz)
-    s = r1 + r2
-    Q = r1 * (3*z1**2 + 2*z1*z2 + z2**2) + r2 * (z1**2 + 2*z1*z2 + 3*z2**2)
-    c = Bond / 12.0
-    E = np.sum(d * s + c * dr * Q)
-
-    grad = np.zeros(points.shape)
-    grad[0, :-1] += -dr / d * s + d + c * (-Q + dr * (3*z1**2 + 2*z1*z2 + z2**2))
-    grad[0, 1:]  +=  dr / d * s + d + c * ( Q + dr * (z1**2 + 2*z1*z2 + 3*z2**2))
-    grad[1, :-1] += -dz / d * s + c * dr * (r1 * (6*z1 + 2*z2) + r2 * (2*z1 + 2*z2))
-    grad[1, 1:]  +=  dz / d * s + c * dr * (r1 * (2*z1 + 2*z2) + r2 * (2*z1 + 6*z2))
-    return float(E), grad
-
-
-def profile_volume(points: np.ndarray):
-    '''
-        Volume between the surface of revolution of the polygonal profile
-        points (2, N) and the nozzle plane z = 0 (same value as volume_droplet):
-
-            (2 pi / 3) sum over segments of
-                (z1 - z2) (r1^2 + r1 r2 + r2^2) / 3
-              + (r2 - r1) (2 r1 z1 + r1 z2 + r2 z1 + 2 r2 z2) / 6
-
-        Returns (V, dV/dpoints), the gradient with shape (2, N).
-    '''
-    r1, z1, r2, z2 = points[0, :-1], points[1, :-1], points[0, 1:], points[1, 1:]
-    dr, dzm = r2 - r1, z1 - z2
-    S2 = r1**2 + r1*r2 + r2**2
-    M = 2*r1*z1 + r1*z2 + r2*z1 + 2*r2*z2
-    c = 2.0 * np.pi / 3.0
-    V = c * np.sum(dzm * S2 / 3.0 + dr * M / 6.0)
-
-    grad = np.zeros(points.shape)
-    grad[0, :-1] += c * (dzm * (2*r1 + r2) / 3.0 + (-M + dr * (2*z1 + z2)) / 6.0)
-    grad[0, 1:]  += c * (dzm * (r1 + 2*r2) / 3.0 + ( M + dr * (z1 + 2*z2)) / 6.0)
-    grad[1, :-1] += c * ( S2 / 3.0 + dr * (2*r1 + r2) / 6.0)
-    grad[1, 1:]  += c * (-S2 / 3.0 + dr * (r1 + 2*r2) / 6.0)
-    return float(V), grad
-
-
-def initial_profile(droplet_Volume: float, points_num: int):
-    '''
-        Same starting geometry as find_droplet_optimization: the spherical cap
-        with volume droplet_Volume hanging from the nozzle edge (r, z) = (1, 0),
-        discretized in points_num points from the nozzle edge to the axis.
-
-        Returns (Lpoints0 (2, points_num), center (2,)).
-    '''
-    def volume(h):
-        return np.pi * (h + 2/3 * (h**3 + (1 + h**2)**1.5))
-
-    def dvolume(h):
-        return np.pi * (np.sqrt(1 + h**2) + h)**2
-
-    h = optm.newton(lambda h: volume(h) - droplet_Volume, x0=0.0, fprime=dvolume, tol=1e-12)
-    R = np.sqrt(1 + h**2)
-
-    center = point(0.0, -h)
-    arc = Arc(point(1.0, 0.0), point(0.0, -h - R), center, True, False)
-    ctr = Contour(1.0)
-    ctr.add_component(arc)
-    ctr.discretize_n_lines(points_num - 1)
-
-    Lpoints0 = np.hstack([ctr.Lmatrix[0:2, :], ctr.Lmatrix[3:5, -1:]])
-    return Lpoints0, center
-
 
 def find_droplet_augmented_lagrangian(
     droplet_Volume: float,

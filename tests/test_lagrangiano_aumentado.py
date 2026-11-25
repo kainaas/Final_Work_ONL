@@ -206,3 +206,18 @@ def test_diferencas_finitas_igual_ao_gradiente_exato():
                                                verbose=False)
     assert d2.get_height() == pytest.approx(d1.get_height(), abs=1e-4)
     assert l2 == pytest.approx(l1, abs=1e-5)
+
+
+def test_slsqp_2d_comeca_viavel_e_fica_perto_do_volume():
+    """A calota inicial 2D já tem o volume pedido, e o SLSQP (com a energia
+    escalada) não se afasta do volume durante as iterações: sem a escala, o
+    volume 20 pulava para 35 no segundo passo."""
+    from droplet_optimization import find_droplet_optimization, initial_profile, profile_volume
+    for V in (5.0, 20.0):
+        P0, _ = initial_profile(V, 30)
+        assert profile_volume(P0)[0] == pytest.approx(V, rel=1e-12)
+        vols = []
+        find_droplet_optimization(V, 0.001, BOND, 30, verbose=False,
+                                  callback=lambda P: vols.append(profile_volume(P)[0]))
+        assert max(abs(v - V) for v in vols) < 0.01 * V
+        assert vols[-1] == pytest.approx(V, rel=1e-8)
