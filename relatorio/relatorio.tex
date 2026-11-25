@@ -639,8 +639,8 @@ dependem do volume e são os mesmos usados em \code{run/comparison.py}.
 
 O código foi escrito em Python, com NumPy \parencite{harris2020}, SciPy
 \parencite{virtanen2020} e Matplotlib \parencite{hunter2007}. Os resultados deste
-relatório foram obtidos com Python 3.14.5, NumPy 2.4.6, SciPy 1.18.0 e
-Matplotlib 3.11.0. A implementação do método do lagrangiano aumentado, os testes
+relatório foram obtidos com Python 3.14.4, NumPy 2.5.5, SciPy 1.18.1 e
+Matplotlib 3.11.2. A implementação do método do lagrangiano aumentado, os testes
 automatizados e a redação inicial deste relatório contaram com o auxílio do assistente
 Claude \parencite{claude2026}. O repositório está organizado da seguinte forma:
 
@@ -769,8 +769,8 @@ com $\mu_0 = \num{0.5}$ e $\rho = \num{1.1}$, partindo de $x_0 = (0, 0)$. A solu
 exata é $x^* = (-\sqrt 2, -1/\sqrt 2)$, com multiplicador $\lambda^* = \sqrt 2$. A
 Tabela~\ref{tab:exemplo} compara os valores de $\mu_k$ e $\lambda_k$ mostrados na
 Figura 5.32 do livro com os nossos, que coincidem em todas as casas decimais
-publicadas. O método termina em 20 iterações externas com $\lambda = \num{1.41421357}$,
-um erro de \num{7.3e-9}.
+publicadas. O método termina em 19 iterações externas com $\lambda = \num{1.41421357}$,
+um erro de \num{4.1e-9}.
 
 \begin{table}[H]
   \centering
@@ -809,11 +809,11 @@ A Tabela~\ref{tab:comparacao} e a Figura~\ref{fig:comparacao} comparam, para tr�
 volumes, a solução da EDO com as soluções do Problema~\ref{prob:discreto} obtidas pelo
 SLSQP e pelo lagrangiano aumentado, ambos com $N = 30$ pontos. Os dois métodos de
 otimização chegam à mesma solução discreta: para $\Vh^*/3$ e $2\Vh^*/3$, as alturas
-diferem em menos de \num{1.4e-6} e os multiplicadores em menos de \num{8.2e-8}. A
+diferem em menos de \num{1.4e-6} e os multiplicadores em menos de \num{9e-8}. A
 diferença para a EDO é o erro da discretização: \qty{0.23}{\percent} na altura para
 $\Vh^*/3$ e $2\Vh^*/3$, e \qty{2.2}{\percent} para $\Vh^*$. O lagrangiano aumentado
-precisou de 4 ou 5 iterações externas e foi cerca de duas vezes mais rápido que o
-SLSQP.
+precisou de 4 ou 5 iterações externas e foi um pouco mais rápido que o SLSQP
+(entre \qty{0.16}{s} e \qty{0.20}{s}, contra \qty{0.18}{s} a \qty{0.28}{s}).
 
 \begin{table}[H]
   \centering
@@ -846,9 +846,9 @@ diferença em $N = 128$ vem da precisão com que cada um resolve o problema.
 O tempo, porém, cresce de forma muito diferente. O SLSQP estima os gradientes por
 diferenças finitas, o que custa cerca de $N$ avaliações da energia e do volume a cada
 iteração, e resolve um subproblema quadrático denso; seu tempo passa de
-\qty{0.04}{s}, com $N = 8$, para \qty{5.72}{s}, com $N = 128$. O lagrangiano aumentado
-usa o gradiente exato e precisou de 4 a 6 iterações externas em todos os casos; seu
-tempo passa de \qty{0.08}{s} para \qty{0.79}{s}, cerca de sete vezes menos que o
+\qty{0.04}{s}, com $N = 8$, para \qty{5.63}{s}, com $N = 128$. O lagrangiano aumentado
+usa o gradiente exato e precisou de 4 ou 5 iterações externas em todos os casos; seu
+tempo passa de \qty{0.09}{s} para \qty{0.61}{s}, cerca de nove vezes menos que o
 SLSQP em $N = 128$.
 
 \begin{table}[H]
@@ -876,7 +876,7 @@ $|\lambda^* - \lambda_0|/\mu_0 = \lh\,\Vh_0/\mu_0 = \num{4.33e-3}$ dada pela rel
 $h \approx (\lambda^* - \lambda)/\mu$ da Seção~\ref{sec:la}. A partir daí, cada
 atualização do multiplicador reduz a violação em duas a três ordens de grandeza, e o
 critério $|h| \le 10^{-10}$ é atingido na quarta iteração, com $\mu = 8000$; o último
-subproblema precisou de apenas duas iterações do L-BFGS-B. A medida de otimalidade, o
+subproblema precisou de apenas quatro iterações do L-BFGS-B. A medida de otimalidade, o
 gradiente projetado do lagrangiano, fica em torno de $10^{-7}$ durante todo o processo,
 o que mostra que cada subproblema foi resolvido com precisão. À direita, o
 multiplicador converge para o do SLSQP a menos de \num{6e-8}, enquanto a diferença
@@ -945,8 +945,9 @@ valendo em 3D.
 \end{table}
 
 O gradiente exato muda bastante o custo. Na malha $8 \times 16$, com $\Vh = 20$, o
-SLSQP com diferenças finitas leva cerca de dez vezes mais tempo que com o
-gradiente~\eqref{eq:grad-3d}, para o mesmo número de iterações e a mesma solução. Com
+SLSQP com diferenças finitas leva cerca de seis vezes mais tempo que com o
+gradiente~\eqref{eq:grad-3d} (\qty{6.2}{s} contra \qty{1.0}{s}) e chega à mesma
+solução, embora use menos iterações (50 contra 82). Com
 o gradiente exato, mesmo a malha $24 \times 48$, com mais de mil variáveis, é
 resolvida em menos de um minuto.
 
@@ -1017,10 +1018,10 @@ tem uma consequência importante para o lagrangiano aumentado, ilustrada na
 Figura~\ref{fig:descolamento}. Com $\mu_0 = 10$ em vez de $1000$, o primeiro
 subproblema, que tem $\lambda = 0$, praticamente ignora a restrição e encolhe a gota. A
 partir desse ponto, o método converge para outra solução do
-Problema~\ref{prob:discreto}: 25 dos 29 pontos móveis colapsam no centro da calota,
+Problema~\ref{prob:discreto}: 24 dos 29 pontos móveis colapsam no centro da calota,
 sobre o limite $x_i = -1$, e o perfil passa pelo eixo, formando uma gota estrangulada,
 já desprendida do bico. Essa configuração satisfaz a restrição de volume e tem energia
-\qty{22}{\percent} menor ($\Eh = \num{30.64}$ contra \num{39.12}). Ou seja, a gota
+\qty{17}{\percent} menor ($\Eh = \num{32.30}$ contra \num{39.12}). Ou seja, a gota
 pendente em $\Vh^*$ é apenas um mínimo local, e o método, partindo longe dela,
 encontrou outro; fisicamente, trata-se do desprendimento da gota. Para evitar esse
 comportamento, escolhemos $\mu_0$ grande o bastante para que o primeiro subproblema já
@@ -1073,7 +1074,7 @@ Implementamos o método do lagrangiano aumentado de \textcite{martins2021} com o
 usando o L-BFGS-B nos subproblemas, e o validamos reproduzindo o Exemplo 5.8 do livro.
 Aplicado à gota, ele chegou à mesma solução discreta que o SLSQP e reproduziu a forma e
 a pressão dadas pela EDO, com erro de segunda ordem no número de pontos. Com o
-gradiente exato, precisou de 4 a 6 subproblemas e foi até sete vezes mais rápido que o
+gradiente exato, precisou de 4 ou 5 subproblemas e foi até nove vezes mais rápido que o
 SLSQP com diferenças finitas. O estudo também mostrou dois cuidados práticos com o
 método: o parâmetro de penalidade inicial deve ser grande o bastante para que o
 primeiro subproblema não se afaste da restrição, sob pena de o método convergir para
