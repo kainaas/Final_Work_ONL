@@ -6,6 +6,9 @@ Uso, de dentro da pasta relatorio/:
 
     python gerar_figuras.py               # reaproveita dados/resultados.json, se existir
     python gerar_figuras.py --recalcular  # refaz todas as contas (alguns minutos)
+
+Depois de mudar o código, rode com --recalcular: os dados antigos não têm as
+chaves novas (gota3d circular/quadrado/parede, eixo3d, exemplo_livro_slsqp).
 """
 import argparse
 import contextlib
@@ -24,6 +27,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 import scipy
+import scipy.optimize
 
 AQUI = Path(__file__).resolve().parent
 RAIZ = AQUI.parent
@@ -37,7 +41,6 @@ from augmented_lagrangian import (augmented_lagrangian,         # noqa: E402
                                   find_droplet_augmented_lagrangian,
                                   profile_energy)
 from optimization_3d import find_droplet_optimization_3d        # noqa: E402
-from quadrature_triangle import energy_3D                       # noqa: E402
 
 FIGURAS = AQUI / "figuras"
 TABELAS = AQUI / "tabelas"
@@ -52,10 +55,15 @@ A_STAR = 1.19721119513            # pressão no ápice da gota de volume máximo
 V_STAR = 35.39486160126           # volume máximo da gota pendente
 MAX_S, DS = 5.0 * np.pi, 0.001    # integração da EDO (como em run/pendant.py)
 
-# bico quadrado da versão 3D (como em src/3D/test.py)
+# versão 3D: mesmo B do 2D (o comprimento de referência é o raio do bico
+# circular, a = 1 mm); o bico quadrado é [-1, 1]^2 nessas unidades
 BICO_3D = np.array([[1.0, 1.0], [1.0, -1.0], [-1.0, -1.0], [-1.0, 1.0]])
-BOND_3D = (np.sqrt(2.0) * A_BICO)**2 * RHO * const.g / GAMMA
-V_3D = 5.0
+BOND_3D = BOND
+V_3D = 20.0                       # gotas 3D da Figura gota3d (circular, quadrado, parede)
+MALHA_3D = (12, 24)               # anéis x setores
+PAREDE = 1.0                      # parede x <= 1, encostada no bico circular
+V_EIXO = (5.0, 20.0)              # volumes da comparação 3D x axissimétrico
+MALHAS_EIXO = ((6, 12), (8, 16), (12, 24), (16, 32), (24, 48))
 
 
 # ---------------------------------------------------------------------------
@@ -128,6 +136,27 @@ def gota_al(V, N, **kwargs):
             "r": gota.r.tolist(), "z": gota.z.tolist()}
 
 
+def gota_3d(V, malha, bico3d, parede, analytic_gradient=True):
+    """Gota 3D pelo SLSQP; devolve (resumo, malha final)."""
+    t = time.perf_counter()
+    m, res, _, _ = find_droplet_optimization_3d(V, BOND_3D, *malha, bico3d, wall=parede,
+                                                analytic_gradient=analytic_gradient,
+                                                verbose=False, return_result=True)
+    dt = time.perf_counter() - t
+    P = np.asarray(m.points, dtype=float)
+    mult = np.ravel(res.multipliers)
+    resumo = {"V": V, "malha": list(malha), "n_vertices": int(len(P)),
+              "n_variaveis": int(len(res.x)), "n_triangulos": int(len(m.connectivity)),
+              "iteracoes": int(res.nit), "tempo": dt, "sucesso": bool(res.success),
+              "energia": float(res.fun), "altura": float(-P[:, 2].min()),
+              # na convenção do relatório (energia dividida por pi)
+              "lam": float(mult[0] / np.pi),
+              "x_max": float(P[:, 0].max()), "x_min": float(P[:, 0].min())}
+    if parede is not None:
+        resumo["ativas"] = int(np.sum(np.abs(mult[1:]) > 1e-8))
+    return resumo, m
+
+
 def pontos_do_perfil(r, z):
     """Reconstrói os pontos (bico -> ápice) a partir do perfil (r, z) de uma Droplet."""
     r, z = np.asarray(r), np.asarray(z)
@@ -155,10 +184,10 @@ def calcular():
                           "scipy": scipy.__version__, "matplotlib": matplotlib.__version__},
              "bond": BOND, "bond_3d": BOND_3D, "A_star": A_STAR, "V_star": V_STAR}
 
-    print("1/8 família de gotas pelo método do tiro")
+    print("1/9 família de gotas pelo método do tiro")
     dados["familia"] = [gota_tiro(V) for V in (1.0, 5.0, 10.0, 20.0, 30.0, V_STAR)]
 
-    print("2/8 curva V x A, volume máximo e pressão máxima")
+    print("2/9 curva V x A, volume máximo e pressão máxima")
     curva = []
     for A in np.linspace(0.02, 2.2, 219):
         for i, g in enumerate(find_droplets(A, BOND, A_BICO, MAX_S, 0.002)):
@@ -184,13 +213,13 @@ def calcular():
     dados["pressao_maxima"] = {"A": lo, "V": float(gotas[0].V), "V2": float(gotas[1].V),
                                "d": float(gotas[0].get_height())}
 
-    print("3/8 comparação EDO x SLSQP x lagrangiano aumentado (N = 30)")
+    print("3/9 comparação EDO x SLSQP x lagrangiano aumentado (N = 30)")
     dados["comparacao"] = []
     for nome, V in (("V*/3", V_STAR / 3), ("2V*/3", 2 * V_STAR / 3), ("V*", V_STAR)):
         dados["comparacao"].append({"nome": nome, "V": V, "tiro": gota_tiro(V),
                                     "slsqp": gota_slsqp(V, 30), "al": gota_al(V, 30)})
 
-    print("4/8 convergência na malha (V = 2V*/3)")
+    print("4/9 convergência na malha (V = 2V*/3)")
     V = 2 * V_STAR / 3
     conv = {"V": V, "N": [8, 16, 32, 64, 128], "slsqp": [], "al": []}
     for N in conv["N"]:
@@ -200,7 +229,7 @@ def calcular():
             conv[metodo].append(res)
     dados["convergencia"] = conv
 
-    print("5/8 histórico do lagrangiano aumentado (V = V*/3, N = 30)")
+    print("5/9 histórico do lagrangiano aumentado (V = V*/3, N = 30)")
     V = V_STAR / 3
     _, _, res = find_droplet_augmented_lagrangian(V, A_BICO, BOND, 30, verbose=False,
                                                   return_result=True)
@@ -210,10 +239,10 @@ def calcular():
                            "lam": float(-lam[0] / V)}
                           for h, lam in zip(res.history, depois)]
 
-    print("6/8 multiplicador em função do volume")
+    print("6/9 multiplicador em função do volume")
     dados["lambda_V"] = calcular_lambda_V()
 
-    print("7/8 volume máximo: mu0 = 1000 x mu0 = 10")
+    print("7/9 volume máximo: mu0 = 1000 x mu0 = 10")
     desc = {}
     for nome, mu0 in (("mu1000", 1000.0), ("mu10", 10.0)):
         g = gota_al(V_STAR, 30, mu0=mu0)
@@ -221,25 +250,33 @@ def calcular():
         desc[nome] = g
     dados["descolamento"] = desc
 
-    print("8/8 gota 3D com bico quadrado (SLSQP, alguns minutos)")
+    print("8/9 gotas 3D: bico circular, bico quadrado e parede")
     dados["gota3d"] = {}
-    for nome, fix in (("livre", False), ("presa", True)):
-        t = time.perf_counter()
-        malha, saida = calado(find_droplet_optimization_3d, V_3D, BOND_3D, 8, 16, BICO_3D,
-                              fix_boundary=fix, verbose=True)
-        dt = time.perf_counter() - t
-        pts = np.asarray(malha.points, dtype=float)
-        tri = np.asarray(malha.connectivity, dtype=int)
-        np.savez(DADOS / f"gota3d_{nome}.npz", points=pts, connectivity=tri)
-        busca = {k: re.search(rf"{k}:\s*([-\d.eE+]+)", saida)
-                 for k in ("Iterations", "Computed volume")}
-        dados["gota3d"][nome] = {
-            "tempo": dt, "n_vertices": int(len(pts)), "n_triangulos": int(len(tri)),
-            "iteracoes": int(busca["Iterations"].group(1)),
-            "volume": float(busca["Computed volume"].group(1)),
-            "altura": float(-pts[:, 2].min()),
-            "energia": float(energy_3D(np.zeros(len(pts)), malha, BOND_3D,
-                                       np.zeros(3), "strang3"))}
+    for nome, bico3d, parede in (("circular", "circle", None), ("quadrado", BICO_3D, None),
+                                 ("parede", "circle", PAREDE)):
+        g, malha = gota_3d(V_3D, MALHA_3D, bico3d, parede)
+        np.savez(DADOS / f"gota3d_{nome}.npz", points=np.asarray(malha.points, dtype=float),
+                 connectivity=np.asarray(malha.connectivity, dtype=int))
+        dados["gota3d"][nome] = g
+    # custo do gradiente por diferenças finitas (mesma gota circular, malha 8 x 16)
+    dados["gota3d_gradiente"] = {
+        "exato": gota_3d(V_3D, (8, 16), "circle", None)[0],
+        "diferencas_finitas": gota_3d(V_3D, (8, 16), "circle", None, analytic_gradient=False)[0]}
+
+    print("9/9 bico circular x axissimétrico (refinamento da malha)")
+    eixo = []
+    for V in V_EIXO:
+        t = gota_tiro(V)
+        t["energia"] = float(np.pi * profile_energy(pontos_do_perfil(t["r"], t["z"]), BOND)[0])
+        malhas = []
+        for ns in MALHAS_EIXO:
+            g, malha = gota_3d(V, ns, "circle", None)
+            P = np.asarray(malha.points, dtype=float)
+            g["r_vertices"] = np.hypot(P[:, 0], P[:, 1]).tolist()
+            g["z_vertices"] = P[:, 2].tolist()
+            malhas.append(g)
+        eixo.append({"V": V, "tiro": t, "malhas": malhas})
+    dados["eixo3d"] = eixo
 
     print("exemplo 5.8 do livro")
     elipse = lambda x: x[0]**2 / 4.0 + x[1]**2 - 1.0                      # noqa: E731
@@ -251,6 +288,16 @@ def calcular():
                                              "violacao": h["violation"]} for h in res.history],
                               "x": res.x.tolist(), "lam": float(res.lam[0]),
                               "nit": int(res.nit), "sucesso": bool(res.success)}
+    print("exemplo 5.8 do livro com o SLSQP")
+    it = [np.array([2.0, 0.5])]
+    res = scipy.optimize.minimize(
+        lambda x: x[0] + 2.0 * x[1], it[0], jac=lambda x: np.array([1.0, 2.0]), method="SLSQP",
+        constraints=[scipy.optimize.NonlinearConstraint(elipse, 0.0, 0.0,
+                                                         jac=lambda x: np.array([[x[0] / 2.0, 2.0 * x[1]]]))],
+        callback=lambda xk: it.append(np.array(xk)), options={"ftol": 1e-12})
+    dados["exemplo_livro_slsqp"] = {"iteracoes": [x.tolist() for x in it], "x": res.x.tolist(),
+                                    "lam": float(np.ravel(res.multipliers)[0]), "nit": int(res.nit),
+                                    "sucesso": bool(res.success)}
     return dados
 
 
@@ -422,26 +469,113 @@ def figura_descolamento(dados):
     salvar(fig, "descolamento.pdf")
 
 
+def eixos_iguais(ax, pts, zoom=0.85):
+    meio = (pts.max(axis=0) + pts.min(axis=0)) / 2
+    raio = np.ptp(pts, axis=0).max() / 2
+    for eixo, c in zip("xyz", meio):
+        getattr(ax, f"set_{eixo}lim")(c - raio, c + raio)
+    ax.set_box_aspect((1, 1, 1), zoom=zoom)
+
+
 def figura_3d():
-    fig = plt.figure(figsize=(9.0, 4.6))
-    for i, (nome, titulo) in enumerate((("livre", "anel do corte livre"),
-                                        ("presa", "anel do corte fixo"))):
+    fig = plt.figure(figsize=(10.0, 4.2))
+    casos = (("circular", "bico circular"), ("quadrado", "bico quadrado"),
+             ("parede", rf"bico circular e parede $\hat x \leq {PAREDE:g}$"))
+    for i, (nome, titulo) in enumerate(casos):
         m = np.load(DADOS / f"gota3d_{nome}.npz")
         pts, tri = m["points"], m["connectivity"]
-        ax = fig.add_subplot(1, 2, i + 1, projection="3d")
+        ax = fig.add_subplot(1, 3, i + 1, projection="3d")
         ax.add_collection3d(Poly3DCollection(pts[tri], facecolor="lightsteelblue",
-                                             edgecolor="0.25", linewidth=0.3, alpha=0.9))
-        meio = (pts.max(axis=0) + pts.min(axis=0)) / 2
-        raio = np.ptp(pts, axis=0).max() / 2
-        for eixo, c in zip("xyz", meio):
-            getattr(ax, f"set_{eixo}lim")(c - raio, c + raio)
-        ax.set_box_aspect((1, 1, 1), zoom=0.85)
-        ax.view_init(elev=18, azim=-55)
+                                             edgecolor="0.25", linewidth=0.25, alpha=0.9))
+        if nome == "parede":
+            yy, zz = np.meshgrid([-2.0, 2.0], [pts[:, 2].min(), 0.0])
+            ax.plot_surface(np.full_like(yy, PAREDE), yy, zz, color="tab:orange", alpha=0.25)
+        eixos_iguais(ax, pts)
+        ax.view_init(elev=15, azim=-60)
         ax.set_xlabel(r"$\hat x$")
         ax.set_ylabel(r"$\hat y$")
         ax.set_zlabel(r"$\hat z$")
-        ax.set_title(titulo)
+        ax.set_title(titulo, fontsize=9)
     salvar(fig, "gota3d.pdf")
+
+
+def figura_parede(dados):
+    """Vistas de baixo e de frente da gota com e sem a parede."""
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(9.0, 4.4))
+    for nome, cor, rot in (("circular", COR["slsqp"], "sem parede"), ("parede", COR["al"], "com parede")):
+        P = np.load(DADOS / f"gota3d_{nome}.npz")["points"]
+        ax1.plot(P[:, 0], P[:, 1], ".", color=cor, ms=3, label=rot)
+        sel = np.abs(P[:, 1]) < 1e-9          # vértices no plano y = 0
+        for lado, r in ((1, rot), (-1, None)):  # cada metade, do bico ao ápice
+            metade = sel & (lado * P[:, 0] >= -1e-12)
+            o = np.argsort(-P[metade, 2])
+            ax2.plot(P[metade, 0][o], P[metade, 2][o], "o-", color=cor, ms=2.5, lw=1, mfc="none", label=r)
+    for ax in (ax1, ax2):
+        ax.axvline(PAREDE, color="tab:orange", lw=2, label="parede")
+        ax.set_aspect("equal")
+        ax.set_xlabel(r"$\hat x$")
+    ax1.set_ylabel(r"$\hat y$")
+    ax1.set_title("vista de baixo", fontsize=9)
+    ax2.set_ylabel(r"$\hat z$")
+    ax2.set_title(r"corte no plano $\hat y = 0$", fontsize=9)
+    ax2.legend(loc="lower left", fontsize=7)
+    salvar(fig, "parede.pdf")
+
+
+def figura_eixo3d(dados):
+    """Vértices da gota 3D (bico circular) no plano (r, z) sobre o perfil da EDO,
+    e erro em relação à EDO conforme a malha é refinada."""
+    eixo = dados["eixo3d"]
+    fig, axs = plt.subplots(1, 3, figsize=(10.0, 4.2), gridspec_kw={"width_ratios": [1, 1, 1.5]})
+    for ax, caso in zip(axs[:2], eixo):
+        t = caso["tiro"]
+        x, z = perfil(t["r"], t["z"])
+        ax.plot(x, z, "-", color=COR["tiro"], lw=1.2, label=ROTULO["tiro"])
+        g = caso["malhas"][-1]
+        ax.plot(g["r_vertices"], g["z_vertices"], "o", color=COR["slsqp"], ms=2.5, mfc="none",
+                label="3D, malha {}$\\times${}".format(*g["malha"]))
+        bico(ax)
+        ax.set_aspect("equal")
+        ax.set_xlabel(r"$\hat r$")
+        ax.set_title(rf"$\hat V = {caso['V']:g}$", fontsize=9)
+    axs[0].set_ylabel(r"$\hat z$")
+    axs[0].legend(loc="lower left", fontsize=7)
+    ax = axs[2]
+    for caso, marca in zip(eixo, ("o", "s")):
+        n = np.array([g["n_variaveis"] for g in caso["malhas"]], dtype=float)
+        ed = [abs(g["altura"] - caso["tiro"]["d"]) for g in caso["malhas"]]
+        ee = [abs(g["energia"] - caso["tiro"]["energia"]) for g in caso["malhas"]]
+        ax.loglog(n, ed, marca + "-", color=COR["slsqp"], mfc="none",
+                  label=rf"$|\hat d - \hat d_{{EDO}}|$, $\hat V = {caso['V']:g}$")
+        ax.loglog(n, ee, marca + "--", color=COR["al"], mfc="none",
+                  label=rf"$|\hat E - \hat E_{{EDO}}|$, $\hat V = {caso['V']:g}$")
+    n = np.array([g["n_variaveis"] for g in eixo[0]["malhas"]], dtype=float)
+    e0 = abs(eixo[0]["malhas"][0]["altura"] - eixo[0]["tiro"]["d"])
+    ax.loglog(n, e0 * (n / n[0])**-1, ":", color="0.4", label=r"inclinação $n^{-1}$")
+    ax.set_xlabel("número de variáveis $n$")
+    ax.set_ylabel("diferença para a EDO")
+    ax.legend(fontsize=6.5)
+    fig.subplots_adjust(wspace=0.35)
+    salvar(fig, "eixo3d.pdf")
+
+
+def figura_slsqp_livro(dados):
+    ex = dados["exemplo_livro_slsqp"]
+    it = np.asarray(ex["iteracoes"])
+    fig, ax = plt.subplots(figsize=(5.4, 4.4))
+    t = np.linspace(0, 2 * np.pi, 400)
+    ax.plot(2 * np.cos(t), np.sin(t), "k-", lw=1.2, label=r"$h(x) = x_1^2/4 + x_2^2 - 1 = 0$")
+    X, Y = np.meshgrid(np.linspace(-7, 3, 200), np.linspace(-5, 2.5, 200))
+    cs = ax.contour(X, Y, X + 2 * Y, levels=12, colors="0.7", linewidths=0.7)
+    ax.clabel(cs, fontsize=6)
+    ax.plot(it[:, 0], it[:, 1], "o-", color=COR["slsqp"], ms=3.5, lw=1, label="iterados do SLSQP")
+    ax.plot(*it[0], "s", color=COR["slsqp"], ms=6)
+    ax.plot(-np.sqrt(2), -np.sqrt(2) / 2, "*", color=COR["al"], ms=12, label=r"$x^*$")
+    ax.set_aspect("equal")
+    ax.set_xlabel("$x_1$")
+    ax.set_ylabel("$x_2$")
+    ax.legend(fontsize=7, loc="upper left")
+    salvar(fig, "slsqp_livro.pdf")
 
 
 # ---------------------------------------------------------------------------
@@ -509,14 +643,31 @@ def tabela_exemplo_livro(dados):
 
 def tabela_3d(dados):
     linhas = []
-    for nome, rot in (("livre", "livre"), ("presa", "fixo")):
+    for nome, rot in (("circular", "circular"), ("quadrado", "quadrado"), ("parede", "circular + parede")):
         g = dados["gota3d"][nome]
-        linhas.append(rf"{rot} & {g['iteracoes']} & {num(g['tempo'], '.1f')} & "
-                      rf"{num(g['volume'], '.10f')} & {num(g['altura'], '.4f')} & {num(g['energia'], '.4f')} \\")
+        linhas.append(rf"{rot} & {g['n_variaveis']} & {g['iteracoes']} & {num(g['tempo'], '.2f')} & "
+                      rf"{num(g['altura'], '.4f')} & {num(g['energia'], '.4f')} & {num(g['lam'], '.4f')} \\")
     (TABELAS / "gota3d.tex").write_text(
-        "\\begin{tabular}{lccccc}\n\\toprule\n"
-        "Anel do corte & Iterações & Tempo (s) & Volume obtido & Altura $\\hat d$ & Energia $\\hat E$ \\\\\n"
+        "\\begin{tabular}{lcccccc}\n\\toprule\n"
+        "Bico & Variáveis & Iterações & Tempo (s) & Altura $\\hat d$ & Energia $\\hat E$ & $\\hat\\lambda$ \\\\\n"
         "\\midrule\n" + "\n".join(linhas) + "\n\\bottomrule\n\\end{tabular}\n", encoding="utf-8")
+
+
+def tabela_eixo3d(dados):
+    linhas = []
+    for caso in dados["eixo3d"]:
+        t = caso["tiro"]
+        linhas.append(rf"\multirow{{{len(caso['malhas']) + 1}}}{{*}}{{${caso['V']:g}$}} & EDO (tiro) & --- & --- & "
+                      rf"{num(t['d'], '.4f')} & {num(t['energia'], '.4f')} & {num(t['lam'], '.4f')} \\")
+        for g in caso["malhas"]:
+            linhas.append(rf" & {g['malha'][0]}$\times${g['malha'][1]} & {g['n_variaveis']} & {num(g['tempo'], '.2f')} & "
+                          rf"{num(g['altura'], '.4f')} & {num(g['energia'], '.4f')} & {num(g['lam'], '.4f')} \\")
+        linhas.append(r"\midrule")
+    linhas[-1] = r"\bottomrule"
+    (TABELAS / "eixo3d.tex").write_text(
+        "\\begin{tabular}{llccccc}\n\\toprule\n"
+        "$\\hat V$ & Malha & Variáveis & Tempo (s) & $\\hat d$ & $\\hat E$ & $\\hat\\lambda$ \\\\\n\\midrule\n"
+        + "\n".join(linhas) + "\n\\end{tabular}\n", encoding="utf-8")
 
 
 # ---------------------------------------------------------------------------
@@ -547,10 +698,14 @@ def main():
     figura_lambda_V(dados)
     figura_descolamento(dados)
     figura_3d()
+    figura_parede(dados)
+    figura_eixo3d(dados)
+    figura_slsqp_livro(dados)
     tabela_comparacao(dados)
     tabela_convergencia(dados)
     tabela_exemplo_livro(dados)
     tabela_3d(dados)
+    tabela_eixo3d(dados)
     print("figuras em", FIGURAS, "e tabelas em", TABELAS)
 
 
