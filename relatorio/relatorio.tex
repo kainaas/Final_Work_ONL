@@ -567,16 +567,21 @@ abertura fica no plano $z = 0$, onde $P \cdot n = 0$. Consideramos dois bicos:
     exatamente nesse plano, de modo que o anel do corte é a própria borda do bico. Os
     vértices desse anel ficam fixos, que é o análogo tridimensional de $x_0 = 0$ no
     Problema~\ref{prob:discreto}, e as variáveis são os demais vértices.
-  \item \textbf{Bico quadrado} $[-1, 1]^2$ no plano $z = 0$. Como o quadrado contém o
-    círculo do corte e o toca em quatro pontos, a calota é cortada um pouco abaixo,
-    em $z = -0{,}05$, e um ``colar'' de triângulos liga o anel do corte ao contorno do
-    bico. Os vértices do quadrado ficam fixos e os do anel do corte são livres.
+  \item \textbf{Bico quadrado} $[-1, 1]^2$ no plano $z = 0$. A calota é cortada em
+    $z = 0$, como no bico circular, e o seu topo é esticado na horizontal até o anel
+    do corte ficar exatamente sobre o quadrado: um vértice do $k$-ésimo anel abaixo do
+    corte, de azimute $\varphi$, tem as coordenadas horizontais multiplicadas por
+    $1 + (\rho(\varphi) - 1)\, w_k$, em que $\rho(\varphi)$ é a distância do eixo ao
+    quadrado na direção $\varphi$ e $w_k$ cai linearmente de 1, no corte, a 0, no
+    terço superior da calota. O anel do corte é a borda do bico e fica fixo, como no
+    bico circular.
 \end{itemize}
 
 Para que o ponto de partida já satisfaça a restrição, o raio da esfera é escolhido
 de modo que o volume \emph{da malha} seja $\Vh_0$. A fórmula da calota exata dá uma
 primeira estimativa de $h$ (o centro fica em $z = -h$); como a malha de triângulos, e
-no bico quadrado também o colar, alteram um pouco o volume, $h$ é então corrigido pelo
+no bico quadrado também o esticamento do topo, alteram um pouco o volume, $h$ é então
+corrigido pelo
 método de Brent aplicado a $\Vh_{\text{malha}}(h) - \Vh_0$.
 
 \paragraph{Gradientes exatos.} Seja um triângulo de vértices $a, b, c$, com
@@ -973,9 +978,21 @@ resolvida em menos de um minuto.
 A Figura~\ref{fig:gota3d} e a Tabela~\ref{tab:gota3d} mostram a gota de volume
 $\Vh = 20$ na malha $12 \times 24$ em três situações: no bico circular, no bico
 quadrado e no bico circular com a parede $\hat x \le 1$. No bico quadrado a gota
-perde a simetria de rotação perto do bico, onde o colar acompanha o contorno do
-quadrado, mas logo abaixo volta a ficar praticamente redonda: o efeito do formato do
-bico fica restrito a uma região perto da linha de contato.
+perde a simetria de rotação perto do bico, mas a recupera rapidamente: o desvio
+relativo do raio ao longo de cada anel da malha, de \qty{12}{\percent} no bico, cai
+para menos de \qty{1}{\percent} a uma profundidade de \num{0.9} e é desprezível
+abaixo da metade da gota. O efeito do formato do bico fica restrito a uma região perto
+da linha de contato. Como o bico quadrado é maior que o circular (área 4 contra
+$\pi$), ele sustenta a mesma água com uma gota mais curta e de energia menor.
+
+Uma primeira versão deste caso ligava a calota ao quadrado por um ``colar'' de
+triângulos e deixava livre o anel do corte. Como cada vértice anda sobre a reta que sai
+do centro da esfera, que fica abaixo do bico, ao se afastar do eixo ele também sobe: no
+meio dos lados do quadrado o anel saía do bico e passava acima de $z = 0$, e parte do
+colar se dobrava sobre si mesma. O otimizador contava a dobra como superfície, e o
+volume pelo teorema da divergência deixava de valer. Fixar o anel sobre o próprio
+quadrado elimina o problema, e um teste automatizado verifica que nenhum triângulo da
+gota final fica virado.
 
 \begin{figure}[H]
   \centering
