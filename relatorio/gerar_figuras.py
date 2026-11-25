@@ -153,7 +153,14 @@ def gota_3d(V, malha, bico3d, parede, analytic_gradient=True):
               "lam": float(mult[0] / np.pi),
               "x_max": float(P[:, 0].max()), "x_min": float(P[:, 0].min())}
     if parede is not None:
-        resumo["ativas"] = int(np.sum(np.abs(mult[1:]) > 1e-8))
+        # multiplicadores das restrições da parede (convenção do SciPy: c(x) >= 0,
+        # sigma >= 0); ativas são as de multiplicador não nulo
+        sigma = mult[1:]
+        resumo["ativas"] = int(np.sum(np.abs(sigma) > 1e-8))
+        resumo["n_restricoes_parede"] = int(len(sigma))
+        resumo["sigma_max"] = float(sigma.max())
+        resumo["sigma_min"] = float(sigma.min())
+        resumo["sigma_soma"] = float(sigma.sum())
     return resumo, m
 
 
@@ -670,6 +677,49 @@ def tabela_eixo3d(dados):
         + "\n".join(linhas) + "\n\\end{tabular}\n", encoding="utf-8")
 
 
+def tabela_3d_convergencia(dados):
+    """Erro relativo da gota 3D (bico circular) em relação à EDO e ordem observada.
+    Com n variáveis, o tamanho dos triângulos é h ~ n^(-1/2), então a ordem em h é
+    p = 2 log(e_k / e_{k+1}) / log(n_{k+1} / n_k)."""
+    def ordem(e0, e1, n0, n1):
+        return 2.0 * np.log(e0 / e1) / np.log(n1 / n0)
+    linhas = []
+    for caso in dados["eixo3d"]:
+        t, ms = caso["tiro"], caso["malhas"]
+        ed = [abs(g["altura"] - t["d"]) / t["d"] for g in ms]
+        el = [abs(g["lam"] - t["lam"]) / t["lam"] for g in ms]
+        for k, g in enumerate(ms):
+            pd = "---" if k == 0 else num(ordem(ed[k - 1], ed[k], ms[k - 1]["n_variaveis"], g["n_variaveis"]), ".2f")
+            pl = "---" if k == 0 else num(ordem(el[k - 1], el[k], ms[k - 1]["n_variaveis"], g["n_variaveis"]), ".2f")
+            v = rf"\multirow{{{len(ms)}}}{{*}}{{${caso['V']:g}$}}" if k == 0 else ""
+            linhas.append(rf"{v} & {g['malha'][0]}$\times${g['malha'][1]} & {g['n_variaveis']} & "
+                          rf"{num(100 * ed[k], '.2f')} & {pd} & {num(100 * el[k], '.2f')} & {pl} \\")
+        linhas.append(r"\midrule")
+    linhas[-1] = r"\bottomrule"
+    (TABELAS / "eixo3d_erros.tex").write_text(
+        "\\begin{tabular}{llccccc}\n\\toprule\n"
+        " & & & \\multicolumn{2}{c}{Altura $\\hat d$} & \\multicolumn{2}{c}{Pressão $\\hat\\lambda$} \\\\\n"
+        "\\cmidrule(lr){4-5}\\cmidrule(lr){6-7}\n"
+        "$\\hat V$ & Malha & $n$ & erro (\\%) & ordem & erro (\\%) & ordem \\\\\n\\midrule\n"
+        + "\n".join(linhas) + "\n\\end{tabular}\n", encoding="utf-8")
+
+
+def tabela_parede(dados):
+    livre, parede = dados["gota3d"]["circular"], dados["gota3d"]["parede"]
+    linhas = [
+        rf"sem parede & {num(livre['altura'], '.4f')} & {num(livre['x_max'], '.3f')} & {num(livre['energia'], '.4f')} & "
+        rf"{num(livre['lam'], '.4f')} & --- & --- & --- \\",
+        rf"com parede & {num(parede['altura'], '.4f')} & {num(parede['x_max'], '.3f')} & {num(parede['energia'], '.4f')} & "
+        rf"{num(parede['lam'], '.4f')} & {parede['ativas']} de {parede['n_restricoes_parede']} & "
+        rf"{num(parede['sigma_max'], '.4f')} & {num(parede['sigma_soma'], '.4f')} \\",
+    ]
+    (TABELAS / "parede.tex").write_text(
+        "\\begin{tabular}{lccccccc}\n\\toprule\n"
+        "Caso & $\\hat d$ & $\\hat x_{\\max}$ & $\\hat E$ & $\\hat\\lambda$ & Ativas & "
+        "$\\max_j \\sigma_j$ & $\\sum_j \\sigma_j$ \\\\\n\\midrule\n"
+        + "\n".join(linhas) + "\n\\bottomrule\n\\end{tabular}\n", encoding="utf-8")
+
+
 # ---------------------------------------------------------------------------
 
 def main():
@@ -706,6 +756,8 @@ def main():
     tabela_exemplo_livro(dados)
     tabela_3d(dados)
     tabela_eixo3d(dados)
+    tabela_3d_convergencia(dados)
+    tabela_parede(dados)
     print("figuras em", FIGURAS, "e tabelas em", TABELAS)
 
 

@@ -944,6 +944,23 @@ valendo em 3D.
   \input{tabelas/eixo3d.tex}
 \end{table}
 
+A Tabela~\ref{tab:eixo3d-erros} mostra os mesmos resultados como erro relativo em
+relação à EDO, junto com a ordem de convergência observada entre duas malhas
+consecutivas. Como o tamanho $h$ dos triângulos é proporcional a $n^{-1/2}$, a ordem em
+$h$ é $p = 2 \ln(e_k/e_{k+1}) / \ln(n_{k+1}/n_k)$. Nos dois volumes, $p$ cresce com o
+refinamento e se aproxima de 2, tanto para a altura quanto para a pressão: a
+discretização por triângulos planos tem erro de segunda ordem, como a poligonal do
+caso axissimétrico. A pressão converge um pouco mais depressa que a altura, porque é
+uma quantidade integral, que depende da forma inteira e não de um único ponto.
+
+\begin{table}[H]
+  \centering
+  \caption{Erro relativo da gota 3D com bico circular em relação à EDO e ordem de
+    convergência observada em $h \propto n^{-1/2}$ (Autoria própria)}
+  \label{tab:eixo3d-erros}
+  \input{tabelas/eixo3d_erros.tex}
+\end{table}
+
 O gradiente exato muda bastante o custo. Na malha $8 \times 16$, com $\Vh = 20$, o
 SLSQP com diferenças finitas leva cerca de seis vezes mais tempo que com o
 gradiente~\eqref{eq:grad-3d} (\qty{6.2}{s} contra \qty{1.0}{s}) e chega à mesma
@@ -977,11 +994,24 @@ bico fica restrito a uma região perto da linha de contato.
 
 Com a parede, a gota não pode crescer para o lado $\hat x > 1$ e se acomoda do outro
 lado e para baixo (Figura~\ref{fig:parede}): ela fica achatada contra a parede, mais
-comprida e deslocada para $\hat x < 0$. As restrições ativas são as dos vértices que
-encostam na parede, e todas têm multiplicador positivo, como pedem as condições KKT. A
-energia e a pressão aumentam em relação à gota livre, como se espera ao acrescentar
-restrições a um problema de minimização: a gota livre ultrapassa $\hat x = 1$ e
-deixa de ser viável.
+comprida e deslocada para $\hat x < 0$. A Tabela~\ref{tab:parede} resume o efeito da
+restrição. Das restrições \eqref{eq:parede}, uma por vértice que se aproxima da
+parede, só as dos vértices que encostam nela ficam ativas; as demais têm
+multiplicador $\sigma_j = 0$, e as ativas têm $\sigma_j > 0$, exatamente como pedem as
+condições KKT ($\sigma_j \ge 0$ e $\sigma_j\, g_j = 0$). Os multiplicadores medem
+quanto a energia cairia se cada vértice pudesse avançar um pouco além da parede, ou
+seja, fazem o papel da força que a parede exerce sobre a gota. A energia e a pressão
+aumentam em relação à gota livre, como se espera ao acrescentar restrições a um
+problema de minimização: a gota livre ultrapassa $\hat x = 1$ e deixa de ser viável.
+
+\begin{table}[H]
+  \centering
+  \caption{Gota de volume $\Vh = 20$ no bico circular, sem e com a parede
+    $\hat x \le 1$ (malha $12 \times 24$): altura, maior $\hat x$, energia, pressão,
+    restrições da parede ativas e seus multiplicadores (Autoria própria)}
+  \label{tab:parede}
+  \input{tabelas/parede.tex}
+\end{table}
 
 \begin{figure}[H]
   \centering
