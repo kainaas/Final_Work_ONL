@@ -187,3 +187,27 @@ Não são erros confirmados; ficam como sugestões.
 - **Teste:** `test_malha_final_sem_dobras` exige que todos os tetraedros
   formados com um ponto interno da gota tenham volume positivo e que nenhum
   vértice passe de z = 0. Com o código antigo, 24 triângulos falham (malha 8×16).
+
+## SLSQP 2D saía muito do volume nas primeiras iterações
+
+- **Sintoma:** na cena `GotaSeAjeitando`, o volume ia de 20 para 35,4 no
+  segundo passo e a energia subia de 29,5 para 51,9, ao contrário do que a
+  narração dizia. O resultado final estava certo.
+- **Causa:** o SLSQP começa com B_0 = I, então o primeiro passo tem o tamanho
+  do gradiente da energia, e a linearização do volume deixa de valer. O
+  gradiente exato sozinho não muda isso (testado: o caminho é o mesmo).
+- **Correção:** o SLSQP minimiza 0,01·E/π (`OBJECTIVE_SCALE`); o mínimo é o
+  mesmo e o multiplicador, tirado de `res.multipliers`, é dividido pela escala.
+  O SLSQP 2D também passou a usar o gradiente exato (`profile_energy`,
+  `profile_volume`), e a calota inicial 2D tem o h corrigido para a poligonal
+  ter exatamente o volume pedido (antes, 19,965 em vez de 20 com N = 30).
+- **Teste:** `test_slsqp_2d_comeca_viavel_e_fica_perto_do_volume`.
+
+## Outros
+
+- `video/gerar_dados.py`: o tiro falhava em silêncio para V = 35 (a secante
+  diverge perto da dobra da curva V × A); agora usa `brentq` no ramo da gota
+  pendente, entre A* e 1,25.
+- Comentários que ainda falavam do colar foram atualizados, e o exemplo no fim
+  de `src/3D/mesh.py` usa o bico quadrado atual.
+- `run/comparison.py`: strings LaTeX como raw strings (avisos de `\h`).

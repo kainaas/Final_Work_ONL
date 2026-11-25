@@ -23,7 +23,7 @@ sys.path.insert(0, str(RAIZ / "src" / "3D"))
 
 import const                                                    # noqa: E402
 from droplet import find_droplets, shooting                     # noqa: E402
-from droplet_optimization import find_droplet_optimization      # noqa: E402
+from droplet_optimization import find_droplet_optimization, initial_profile  # noqa: E402
 from augmented_lagrangian import (find_droplet_augmented_lagrangian,  # noqa: E402
                                   profile_energy, profile_volume)
 from mesh import deformed_mesh                                  # noqa: E402
@@ -58,7 +58,11 @@ def gota_tiro(V):
     if V >= 35.3:
         A = A_STAR
     elif V > 34.0:
-        A = shooting(V, 1.18, 1.20, BOND, A_BICO)
+        # perto da dobra da curva V x A a secante diverge (falhava em V = 35);
+        # no ramo da gota pendente, V cai de V* a ~30 quando A vai de A* a 1,25
+        def falta(A):
+            return max(g.V for g in calado(find_droplets, A, BOND, A_BICO, MAX_S, DS)) - V
+        A = optm.brentq(falta, A_STAR + 1e-9, 1.25, xtol=1e-13)
     elif V > 20.0:
         A = shooting(V, 1.2, 1.4, BOND, A_BICO)
     elif V > 10.0:
@@ -85,8 +89,8 @@ def reamostra(P, n=200):
 
 
 def otimizacao_2d():
-    """Perfis a cada iteração do SLSQP (2D, N = 30), a partir da calota inicial."""
-    hist = []
+    """Perfis a cada iteração do SLSQP (2D, N = 30); o primeiro é a calota inicial."""
+    hist = [initial_profile(V_DEMO, 30)[0]]
     calado(find_droplet_optimization, V_DEMO, A_BICO, BOND, 30, verbose=False,
            callback=lambda P: hist.append(np.array(P)))
     perfis = np.stack(hist)

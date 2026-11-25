@@ -399,7 +399,8 @@ de $f$ entre duas iterações e a violação das restrições ficam abaixo de \c
 Ao final, ele devolve também os multiplicadores do último subproblema
 (\code{res.multipliers}), na convenção $\nabla f = \sum_j \lambda_j \nabla c_j$, com as
 restrições escritas como $c_j(x) = 0$ ou $c_j(x) \ge 0$; no
-Problema~\ref{prob:discreto} isso dá diretamente $\pi\lh$. Quando os gradientes não
+Problema~\ref{prob:discreto}, em que a energia já está dividida por $\pi$, isso dá
+diretamente $\lh$ (na versão tridimensional, que minimiza $\Eh$, dá $\pi\lh$). Quando os gradientes não
 são fornecidos, o SciPy os estima por diferenças finitas progressivas: cada gradiente
 custa $n + 1$ avaliações da função e de cada restrição, e, como cada avaliação custa
 $O(n)$, a iteração passa a custar $O(n^2)$ só em avaliações. Somado ao subproblema
@@ -513,7 +514,11 @@ $g = \qty{9.81}{m/s^2}$, o que dá $B = \num{0.134753}$.
 Na versão axissimétrica, o perfil é aproximado por uma poligonal de $N$ pontos
 $P_i = (r_i, z_i)$, do ponto $P_0 = (1, 0)$, na borda do bico, até $P_{N-1}$, no eixo. O
 ponto de partida é a calota esférica de volume $\Vh_0$ que passa pela borda do bico,
-cujo centro $c = (0, -h)$ é obtido pelo método de Newton. Cada ponto se move sobre a
+de centro $c = (0, -h)$. O valor de $h$ sai primeiro da fórmula exata do volume da
+calota, pelo método de Newton; como a poligonal inscrita no arco guarda um pouco menos
+de água (\num{19.965} em vez de 20 com $N = 30$), $h$ é depois corrigido por uma busca
+de raiz no volume da própria poligonal, de modo que a otimização começa viável. Cada
+ponto se move sobre a
 reta que o liga ao centro da calota:
 \begin{equation}
   P_i(x) = P_i^0 + x_i \left(P_i^0 - c\right), \qquad i = 0, \ldots, N - 1.
@@ -549,6 +554,17 @@ Como a energia está dividida por $\pi$, o multiplicador do Problema~\ref{prob:d
 na convenção $\nabla(\Eh/\pi) = \lh\, \nabla\Vh$, é $\lh = (A - B\dhat)/\pi$ pela
 Proposição~\ref{prop:multiplicador}. É com essa normalização que comparamos os
 métodos.
+
+Os dois métodos de otimização recebem os gradientes exatos de
+\eqref{eq:energia-segmento} e \eqref{eq:volume-segmento}, levados às variáveis $x_i$
+pela regra da cadeia ($\partial P_i/\partial x_i = P_i^0 - c$). No SLSQP há mais um
+detalhe: como ele começa com $B_0 = I$, o primeiro passo tem o tamanho do gradiente da
+energia, que é grande perto da calota inicial, e a linearização do volume deixa de
+valer. Na primeira versão do código, com $\Vh_0 = 20$, o volume pulava para
+\num{35.4} no segundo passo e só voltava a 20 depois de umas 25 iterações. Por isso o
+SLSQP minimiza $s\,\Eh/\pi$, com $s = 0{,}01$: o minimizador não muda, o multiplicador
+é dividido por $s$ no fim, e o volume fica perto do alvo durante todas as iterações
+(a menos de \qty{0.1}{\percent} para $\Vh_0 = 20$ e $N = 30$).
 
 \subsection{Versão tridimensional}
 \label{sec:modelo-3d}
@@ -814,11 +830,12 @@ A Tabela~\ref{tab:comparacao} e a Figura~\ref{fig:comparacao} comparam, para tr�
 volumes, a solução da EDO com as soluções do Problema~\ref{prob:discreto} obtidas pelo
 SLSQP e pelo lagrangiano aumentado, ambos com $N = 30$ pontos. Os dois métodos de
 otimização chegam à mesma solução discreta: para $\Vh^*/3$ e $2\Vh^*/3$, as alturas
-diferem em menos de \num{1.4e-6} e os multiplicadores em menos de \num{9e-8}. A
+diferem em menos de \num{4e-7} e os multiplicadores em menos de \num{2e-8}. A
 diferença para a EDO é o erro da discretização: \qty{0.23}{\percent} na altura para
-$\Vh^*/3$ e $2\Vh^*/3$, e \qty{2.2}{\percent} para $\Vh^*$. O lagrangiano aumentado
-precisou de 4 ou 5 iterações externas e foi um pouco mais rápido que o SLSQP
-(entre \qty{0.16}{s} e \qty{0.20}{s}, contra \qty{0.18}{s} a \qty{0.28}{s}).
+$\Vh^*/3$ e $2\Vh^*/3$, e \qty{2.2}{\percent} para $\Vh^*$. Com os dois métodos usando
+o gradiente exato, o SLSQP foi o mais rápido: precisou de 47 a 55 iterações e de cerca
+de \qty{0.01}{s}, contra 4 ou 5 iterações externas (e 265 a 341 do L-BFGS-B) e
+\qty{0.07}{s} a \qty{0.08}{s} do lagrangiano aumentado.
 
 \begin{table}[H]
   \centering
@@ -848,13 +865,13 @@ o erro de segunda ordem esperado ao aproximar uma curva suave por uma poligonal.
 dois métodos têm o mesmo erro, porque resolvem o mesmo problema discreto; a pequena
 diferença em $N = 128$ vem da precisão com que cada um resolve o problema.
 
-O tempo, porém, cresce de forma muito diferente. O SLSQP estima os gradientes por
-diferenças finitas, o que custa cerca de $N$ avaliações da energia e do volume a cada
-iteração, e resolve um subproblema quadrático denso; seu tempo passa de
-\qty{0.04}{s}, com $N = 8$, para \qty{5.63}{s}, com $N = 128$. O lagrangiano aumentado
-usa o gradiente exato e precisou de 4 ou 5 iterações externas em todos os casos; seu
-tempo passa de \qty{0.09}{s} para \qty{0.61}{s}, cerca de nove vezes menos que o
-SLSQP em $N = 128$.
+O tempo cresce de forma parecida nos dois métodos, ambos com o gradiente exato. O
+SLSQP passa de \qty{0.01}{s}, com $N = 8$, para \qty{0.21}{s}, com $N = 128$; o
+crescimento vem sobretudo do subproblema quadrático denso, de custo $O(N^3)$. O
+lagrangiano aumentado precisou de 4 ou 5 iterações externas em todos os casos e passa
+de \qty{0.03}{s} para \qty{0.30}{s}. Nesse tamanho de problema o SLSQP é mais rápido,
+mas a diferença diminui com $N$: o L-BFGS-B dos subproblemas não monta nenhuma matriz
+$N \times N$.
 
 \begin{table}[H]
   \centering
@@ -884,7 +901,7 @@ critério $|h| \le 10^{-10}$ é atingido na quarta iteração, com $\mu = 8000$;
 subproblema precisou de apenas quatro iterações do L-BFGS-B. A medida de otimalidade, o
 gradiente projetado do lagrangiano, fica em torno de $10^{-7}$ durante todo o processo,
 o que mostra que cada subproblema foi resolvido com precisão. À direita, o
-multiplicador converge para o do SLSQP a menos de \num{6e-8}, enquanto a diferença
+multiplicador converge para o do SLSQP a menos de \num{2e-8}, enquanto a diferença
 para a EDO para em \num{1.3e-4}, que é o erro da discretização.
 
 \begin{figure}[H]
@@ -953,9 +970,10 @@ A Tabela~\ref{tab:eixo3d-erros} mostra os mesmos resultados como erro relativo e
 relação à EDO, junto com a ordem de convergência observada entre duas malhas
 consecutivas. Como o tamanho $h$ dos triângulos é proporcional a $n^{-1/2}$, a ordem em
 $h$ é $p = 2 \ln(e_k/e_{k+1}) / \ln(n_{k+1}/n_k)$. Nos dois volumes, $p$ cresce com o
-refinamento e se aproxima de 2, tanto para a altura quanto para a pressão: a
-discretização por triângulos planos tem erro de segunda ordem, como a poligonal do
-caso axissimétrico. A pressão converge um pouco mais depressa que a altura, porque é
+refinamento: na pressão chega a \num{1.92} e \num{1.95}, e na altura fica entre
+\num{1.64} e \num{1.81}, ainda subindo na malha mais fina. Os valores são compatíveis
+com um erro de segunda ordem da discretização por triângulos planos, como o da
+poligonal no caso axissimétrico. A pressão converge um pouco mais depressa que a altura, porque é
 uma quantidade integral, que depende da forma inteira e não de um único ponto.
 
 \begin{table}[H]
@@ -967,9 +985,9 @@ uma quantidade integral, que depende da forma inteira e não de um único ponto.
 \end{table}
 
 O gradiente exato muda bastante o custo. Na malha $8 \times 16$, com $\Vh = 20$, o
-SLSQP com diferenças finitas leva cerca de seis vezes mais tempo que com o
-gradiente~\eqref{eq:grad-3d} (\qty{6.2}{s} contra \qty{1.0}{s}) e chega à mesma
-solução, embora use menos iterações (50 contra 82). Com
+SLSQP com diferenças finitas leva mais de dez vezes mais tempo que com o
+gradiente~\eqref{eq:grad-3d} (\qty{2.8}{s} contra \qty{0.22}{s}) e chega à mesma
+solução, com praticamente o mesmo número de iterações (49 contra 52). Com
 o gradiente exato, mesmo a malha $24 \times 48$, com mais de mil variáveis, é
 resolvida em menos de um minuto.
 
@@ -1049,11 +1067,13 @@ bico. Na formulação discreta, o SLSQP e o lagrangiano aumentado chegam à mesm
 solução, e a diferença para a EDO, de segunda ordem em $N$, vem só da discretização do
 perfil.
 
-A vantagem de tempo do lagrangiano aumentado deve ser lida com cuidado. Ela vem
-sobretudo do gradiente exato, que só escrevemos para o lagrangiano aumentado: o SLSQP
-recebeu apenas a função objetivo e a restrição e estimou as derivadas por diferenças
-finitas. Fornecer o mesmo gradiente ao SLSQP provavelmente reduziria bastante o seu
-custo. Do ponto de vista do algoritmo, o que os resultados mostram é que o lagrangiano
+Na comparação de tempo, os dois métodos recebem o mesmo gradiente exato. Numa
+versão anterior deste trabalho o SLSQP estimava as derivadas por diferenças finitas e
+era até nove vezes mais lento que o lagrangiano aumentado; com o gradiente exato, ele
+passou a ser o mais rápido para $N \le 128$. Para o lagrangiano aumentado, o que se pode esperar é
+uma vantagem com $N$ grande, porque o L-BFGS-B não monta matrizes densas; nos tamanhos
+testados ela não aparece.
+Do ponto de vista do algoritmo, o que os resultados mostram é que o lagrangiano
 aumentado resolve o problema com poucos subproblemas e com valores moderados de $\mu$,
 sem o mal condicionamento da penalidade quadrática, como previsto pela relação
 $h \approx (\lambda^* - \lambda)/\mu$.
@@ -1121,8 +1141,8 @@ Implementamos o método do lagrangiano aumentado de \textcite{martins2021} com o
 usando o L-BFGS-B nos subproblemas, e o validamos reproduzindo o Exemplo 5.8 do livro.
 Aplicado à gota, ele chegou à mesma solução discreta que o SLSQP e reproduziu a forma e
 a pressão dadas pela EDO, com erro de segunda ordem no número de pontos. Com o
-gradiente exato, precisou de 4 ou 5 subproblemas e foi até nove vezes mais rápido que o
-SLSQP com diferenças finitas. O estudo também mostrou dois cuidados práticos com o
+gradiente exato, precisou de 4 ou 5 subproblemas; com o mesmo gradiente, o SLSQP foi
+mais rápido nos tamanhos testados, mas a diferença diminui com o número de pontos. O estudo também mostrou dois cuidados práticos com o
 método: o parâmetro de penalidade inicial deve ser grande o bastante para que o
 primeiro subproblema não se afaste da restrição, sob pena de o método convergir para
 outra solução, como a gota desprendida perto do volume máximo; e o critério de parada

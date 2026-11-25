@@ -257,7 +257,7 @@ class GotaSeAjeitando(Scene):
                                                     font_size=44, color=DESTAQUE).next_to(rot_e, DOWN))
         num_v = always_redraw(lambda: DecimalNumber(np.interp(t.get_value(), k, volumes), num_decimal_places=3,
                                                     font_size=44, color=AGUA).next_to(rot_v, DOWN))
-        passo = always_redraw(lambda: Text(f"passo {int(round(t.get_value())) + 1}", font_size=28)
+        passo = always_redraw(lambda: Text(f"passo {int(round(t.get_value()))}", font_size=28)
                               .move_to(RIGHT * 3 + DOWN * 2.2))
         self.play(FadeIn(rot_e), FadeIn(rot_v), FadeIn(num_e), FadeIn(num_v), FadeIn(passo))
         self.play(t.animate.set_value(len(perfis) - 1), run_time=10, rate_func=linear)

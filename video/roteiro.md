@@ -46,7 +46,7 @@ técnica aparecer, ela vem com uma comparação do dia a dia.
 | Tela | Narração |
 |---|---|
 | `GotaSeAjeitando` (parte 1): perfil da gota feito de 30 pontos ligados por retas; cada ponto anda sobre uma reta que sai do centro. | Para o computador, a gota é um desenho feito de pontos ligados por retas. Cada ponto pode andar para dentro ou para fora. O computador calcula a energia desse desenho e o volume de água dentro dele. |
-| `GotaSeAjeitando` (parte 2): o perfil vai mudando a cada passo; contadores de energia e de volume ao lado. | Começamos com um pedaço de esfera com a quantidade certa de água. A cada passo, o método mexe em todos os pontos ao mesmo tempo para baixar a energia, sem mudar o volume. Repare: a energia vai caindo, e o volume fica parado em 20. Depois de umas trinta e poucas rodadas, a gota não muda mais. |
+| `GotaSeAjeitando` (parte 2): o perfil vai mudando a cada passo; contadores de energia e de volume ao lado. | Começamos com um pedaço de esfera com a quantidade certa de água. A cada passo, o método mexe em todos os pontos ao mesmo tempo para baixar a energia, sem mudar o volume. Repare: a energia vai caindo, e o volume fica parado em 20. Depois de umas trinta rodadas, a gota praticamente não muda mais. |
 | `GotaSeAjeitando` (parte 3): a curva da física (EDO) aparece por cima dos pontos. | E aqui vem a melhor parte. Existe outro jeito, mais antigo, de calcular a forma da gota: usando as leis da física diretamente, com uma equação. Quando colocamos as duas respostas uma em cima da outra, elas coincidem. Dois caminhos completamente diferentes chegam à mesma gota. |
 
 ## 6. Crescendo até cair (6:15 – 7:30)
@@ -82,6 +82,6 @@ técnica aparecer, ela vem com uma comparação do dia a dia.
   livres ou pular e usar só as cenas.
 - Se o tempo apertar, a seção 4 pode perder a cena `DescendoOMorro` e ir direto à
   `TrilhaRestrita` (ganha uns 30 segundos).
-- Os números falados (volume 20, "trinta e poucas rodadas", "muitas vezes mais
+- Os números falados (volume 20, "umas trinta rodadas", "muitas vezes mais
   rápido") vêm de `video/gerar_dados.py` e de `relatorio/gerar_figuras.py`. Vale
   conferir depois de rodar tudo de novo.
