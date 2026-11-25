@@ -2,8 +2,8 @@
 
 **Duração:** cerca de 10 minutos. **Narração:** Gabriel. **Público:** até o ensino médio.
 
-A narração tem cerca de 1.400 palavras, o que dá uns 10 minutos falando com calma
-(140 palavras por minuto). Os tempos são aproximados. A coluna **Tela** indica a cena
+A narração tem cerca de 960 palavras, o que dá uns 7 minutos falando com calma
+(140 palavras por minuto); o plano para chegar a 10 minutos está em `transicoes.md`. Os tempos são aproximados. A coluna **Tela** indica a cena
 de `cenas.py` (renderizada com `manim -qh cenas.py NomeDaCena`) ou uma filmagem.
 
 Regras de linguagem: nada de derivada, gradiente ou multiplicador. Quando uma ideia
