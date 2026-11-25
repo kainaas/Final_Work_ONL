@@ -169,3 +169,21 @@ Não são erros confirmados; ficam como sugestões.
   SLSQP em `jac=` (malha 8×16: de ~10 s para ~0,05 s). Isso resolve a
   pendência "Desempenho do 3D" acima.
 - `wall_constraint` / `wall=`: parede plana `x <= w` como restrição linear.
+
+## Dobra do colar no bico quadrado (corrigido)
+
+- **Sintoma:** na animação da gota no bico quadrado aparecia uma
+  "singularidade" perto do bico.
+- **Causa:** o anel do corte da calota ficava 0,05 abaixo do bico, ligado ao
+  quadrado por um colar de uma camada de triângulos, e era livre. Cada vértice
+  anda na reta que sai do centro da esfera (abaixo do bico), então ao ir para
+  fora ele também sobe. No meio dos lados do quadrado o anel saía do quadrado e
+  subia acima de z = 0, e 12 dos 48 triângulos do colar viravam (malha 12×24,
+  V = 20). A energia contava a dobra como superfície e o volume pela divergência
+  deixava de valer.
+- **Correção:** não há mais colar. O topo da calota é esticado na horizontal
+  (`Mesh.fit_cut_to_polygon`) para o anel do corte ficar exatamente sobre o
+  quadrado, e o anel é fixo, como no bico circular e como `x[0] = 0` no 2D.
+- **Teste:** `test_malha_final_sem_dobras` exige que todos os tetraedros
+  formados com um ponto interno da gota tenham volume positivo e que nenhum
+  vértice passe de z = 0. Com o código antigo, 24 triângulos falham (malha 8×16).

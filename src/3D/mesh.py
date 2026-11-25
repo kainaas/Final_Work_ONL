@@ -320,6 +320,55 @@ class Mesh:
         self.has_nozzle = True
         return self
 
+    @staticmethod
+    def polygon_radius(contour, phi):
+        """
+        Distance from the axis (0, 0) to the boundary of a polygon star-shaped
+        with respect to the origin, along the directions phi (array).
+        """
+        P = np.asarray(contour, dtype=float)
+        A, B = P, np.roll(P, -1, axis=0)
+        phi = np.atleast_1d(np.asarray(phi, dtype=float))
+        u = np.stack([np.cos(phi), np.sin(phi)], axis=1)            # (K, 2)
+        e = B - A                                                   # (M, 2)
+        cross = lambda a, b: a[..., 0] * b[..., 1] - a[..., 1] * b[..., 0]  # noqa: E731
+        den = cross(u[:, None, :], e[None, :, :])                   # (K, M)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            t = cross(A[None, :, :], e[None, :, :]) / den           # distance along u
+            s = cross(A[None, :, :], u[:, None, :]) / den           # position on edge
+        ok = (np.abs(den) > 1e-14) & (s >= -1e-12) & (s <= 1 + 1e-12) & (t > 0)
+        t = np.where(ok, t, np.inf)
+        r = t.min(axis=1)
+        if not np.all(np.isfinite(r)):
+            raise ValueError("The nozzle polygon must be star-shaped around (0, 0).")
+        return r
+
+    def fit_cut_to_polygon(self, contour, blend_stacks: int):
+        """
+        Polygonal nozzle on the plane z = 0: stretches the cap horizontally so
+        that the ring of the cut (a unit circle on z = 0) lies exactly on the
+        polygon. The ring becomes the edge of the nozzle and is fixed, as with
+        the circular nozzle; there is no collar of triangles.
+
+        Each vertex in the k-th ring below the cut is scaled horizontally by
+        1 + (rho(phi) - 1) w_k, where rho(phi) is the distance to the polygon
+        along its azimuth phi and w_k decreases linearly from 1 (the cut) to
+        0 after blend_stacks rings, so only the top of the cap is deformed.
+        """
+        if not self.cut_boundary:
+            raise ValueError("No spherical cut boundary found.")
+
+        n = len(self.cut_boundary)
+        P = np.asarray(self.points, dtype=float)
+        ids = np.arange(self.num_points - 1)           # every vertex but the pole
+        k = ids // n                                   # ring index (0 = the cut)
+        w = np.clip(1.0 - k / max(blend_stacks, 1), 0.0, 1.0)
+        phi = np.arctan2(P[ids, 1], P[ids, 0])
+        rho = self.polygon_radius(contour, phi)
+        P[ids, :2] *= (1.0 + (rho - 1.0) * w)[:, None]
+        self.points = list(P)
+        return self.use_cut_as_nozzle()
+
     def calculate_face_normals(self):
         """
         Calculate unit normals and areas for every triangle.

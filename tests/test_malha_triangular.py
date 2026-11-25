@@ -69,9 +69,29 @@ def test_bico_circular_prende_so_o_bico():
     assert np.allclose(P[ring, 2], 0.0) and np.allclose(np.hypot(P[ring, 0], P[ring, 1]), 1.0)
     assert len(mesh.free_ids) == mesh.num_points - 12
 
+    # bico quadrado: o anel do corte fica sobre o quadrado e também é fixo
     mesh, c = initial_mesh(5.0, 6, 12, NOZZLE)
-    assert set(mesh.cut_boundary) <= set(mesh.free_ids)
-    assert not set(mesh.nozzle_boundary) & set(mesh.free_ids)
+    P = np.asarray(mesh.points)
+    ring = mesh.cut_boundary
+    assert mesh.nozzle_boundary == ring
+    assert not set(ring) & set(mesh.free_ids)
+    assert np.allclose(P[ring, 2], 0.0)
+    assert np.allclose(np.max(np.abs(P[ring, :2]), axis=1), 1.0)
+
+
+@pytest.mark.parametrize("nozzle", ["circle", NOZZLE])
+def test_malha_final_sem_dobras(nozzle):
+    """Nenhum triângulo da gota final fica virado: todos os tetraedros formados
+    com um ponto interno da gota têm volume positivo, e nenhum vértice passa
+    acima do plano do bico (no bico quadrado, o antigo colar dobrava)."""
+    from optimization_3d import find_droplet_optimization_3d
+    m = find_droplet_optimization_3d(20.0, 0.134753, 8, 16, nozzle, verbose=False)
+    P = np.asarray(m.points)
+    F = np.asarray(m.connectivity, dtype=int)
+    o = np.array([0.0, 0.0, P[:, 2].min() / 2])
+    a, b, c = P[F[:, 0]] - o, P[F[:, 1]] - o, P[F[:, 2]] - o
+    assert np.all(np.einsum("ij,ij->i", a, np.cross(b, c)) > 0)
+    assert P[:, 2].max() <= 1e-12
 
 
 @pytest.mark.parametrize("nozzle", ["circle", NOZZLE])

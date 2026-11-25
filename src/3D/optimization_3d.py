@@ -33,22 +33,24 @@ def is_circular(nozzle) -> bool:
     return isinstance(nozzle, str) and nozzle == "circle"
 
 
-def build_mesh(h, num_stacks, num_sectors, nozzle, collar_gap=0.05):
+def build_mesh(h, num_stacks, num_sectors, nozzle):
     '''
-        Cap of the sphere of radius R = sqrt(1 + h^2) cut along a unit circle.
+        Cap of the sphere of radius R = sqrt(1 + h^2) cut along the unit
+        circle of the plane z = 0 (centre at (0, 0, -h)).
 
-        nozzle = "circle": the cut lies on the plane z = 0 and the cut ring is
-            the edge of a circular nozzle of radius 1 (fixed vertices).
-        nozzle = array (M, 2): polygonal nozzle on z = 0. The cut is placed
-            collar_gap below it and joined to it by a collar of triangles; the
-            cut ring is free to move.
+        nozzle = "circle": the cut ring is the edge of a circular nozzle of
+            radius 1.
+        nozzle = array (M, 2): polygonal nozzle on z = 0 (star-shaped around
+            the axis, containing the unit circle). The top of the cap is
+            stretched horizontally so that the cut ring lies on the polygon
+            (see Mesh.fit_cut_to_polygon).
 
-        Returns (mesh, center), where center is the centre of the sphere, the
-        point the vertices move towards/away from.
+        In both cases the cut ring is the nozzle edge and stays fixed: the
+        droplet wets the nozzle up to its edge, as x_0 = 0 in the 2D version.
+        Returns (mesh, center); the free vertices move towards/away from center.
     '''
     R = np.sqrt(1 + h**2)
-    gap = 0.0 if is_circular(nozzle) else collar_gap
-    center = point(0.0, 0.0, -h - gap)
+    center = point(0.0, 0.0, -h)
 
     mesh = Mesh.cut_sphere(
         r=R,
@@ -61,25 +63,22 @@ def build_mesh(h, num_stacks, num_sectors, nozzle, collar_gap=0.05):
     if is_circular(nozzle):
         mesh.use_cut_as_nozzle()
     else:
-        if gap <= 0:
-            raise ValueError("A polygonal nozzle needs collar_gap > 0.")
-        mesh.attach_nozzle(np.asarray(nozzle, dtype=float), 0.0, 0.0)
+        mesh.fit_cut_to_polygon(np.asarray(nozzle, dtype=float), max(num_stacks // 3, 1))
 
     return mesh, center
 
 
-def initial_mesh(droplet_Volume, num_stacks, num_sectors, nozzle,
-                 collar_gap=0.05, QuadRule="strang3"):
+def initial_mesh(droplet_Volume, num_stacks, num_sectors, nozzle, QuadRule="strang3"):
     '''
         Initial mesh whose discrete volume is exactly droplet_Volume.
 
         The exact cap formula gives a first guess for h; the triangulated
-        surface (and, for a polygonal nozzle, the collar) changes the volume
+        surface (and, for a polygonal nozzle, the stretched top) changes the volume
         a little, so h is then corrected by a scalar root search on the
         volume of the mesh itself.
     '''
     def V_mesh(h):
-        mesh, center = build_mesh(h, num_stacks, num_sectors, nozzle, collar_gap)
+        mesh, center = build_mesh(h, num_stacks, num_sectors, nozzle)
         return volume_3D(np.zeros(len(mesh.free_ids)), mesh, center, QuadRule)
 
     _, h0 = sphere_from_volume(droplet_Volume)
@@ -95,7 +94,7 @@ def initial_mesh(droplet_Volume, num_stacks, num_sectors, nozzle,
         hi += step
     h = optm.brentq(f, lo, hi, xtol=1e-14, rtol=1e-14)
 
-    return build_mesh(h, num_stacks, num_sectors, nozzle, collar_gap)
+    return build_mesh(h, num_stacks, num_sectors, nozzle)
 
 
 # ---------------------------------------------------------------------------
@@ -144,7 +143,6 @@ def find_droplet_optimization_3d(
     wall: float | None = None,
     QuadRule: str = "strang3",
     analytic_gradient: bool = True,
-    collar_gap: float = 0.05,
     callback=None,
     verbose: bool = True,
     return_result: bool = False,
@@ -153,8 +151,9 @@ def find_droplet_optimization_3d(
         Minimizes the energy of a triangulated droplet hanging from a nozzle,
         with fixed volume (SLSQP).
 
-        nozzle: "circle" (radius 1, the cut ring is the nozzle edge) or an
-            array (M, 2) with the vertices of a polygonal nozzle on z = 0.
+        nozzle: "circle" (radius 1) or an array (M, 2) with the vertices of a
+            polygonal nozzle on z = 0. Either way the cut ring is the nozzle
+            edge and is fixed.
         wall: if given, adds the flat wall x <= wall (see wall_constraint).
             wall = 1 with the circular nozzle puts the wall touching the nozzle.
         QuadRule: triangle quadrature rule ("strang3", "strang7" or "strang10").
@@ -168,8 +167,7 @@ def find_droplet_optimization_3d(
     # volume constraint does not accumulate between calls
     constraints = list(constraints or [])
 
-    mesh, center = initial_mesh(droplet_Volume, num_stacks, num_sectors, nozzle,
-                                collar_gap, QuadRule)
+    mesh, center = initial_mesh(droplet_Volume, num_stacks, num_sectors, nozzle, QuadRule)
 
     # only the free vertices are variables; the nozzle is fixed
     N = len(mesh.free_ids)
