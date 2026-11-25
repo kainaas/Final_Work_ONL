@@ -14,6 +14,7 @@
 \usepackage{amsmath, amssymb, amsthm}
 \usepackage{graphicx}
 \usepackage{booktabs}
+\usepackage{multirow}
 \usepackage{float}
 \usepackage{algorithm}
 \usepackage{algpseudocode}
@@ -114,8 +115,10 @@ SLSQP, um método de programação quadrática sequencial disponível no SciPy
 \parencite{kraft1988, virtanen2020}, e o método do lagrangiano aumentado, que
 implementamos a partir do Algoritmo 5.2 de \textcite{martins2021}. As soluções da EDO
 servem de referência para validar a otimização, inclusive o multiplicador de
-Lagrange. Por fim, aplicamos a formulação variacional a uma gota tridimensional
-pendurada em um bico quadrado, caso em que a EDO axissimétrica deixa de valer.
+Lagrange. Por fim, aplicamos a formulação variacional a uma gota tridimensional:
+primeiro com um bico circular, para comparar com a solução axissimétrica, e depois em
+dois casos em que a EDO axissimétrica deixa de valer, um bico quadrado e uma gota
+encostada em uma parede plana.
 
 % ---------------------------------------------------------------------------
 \chapter{Objetivos}
@@ -133,7 +136,9 @@ resolvê-lo. Mais especificamente, buscamos:
     pela EDO e estudar a convergência com o refinamento da discretização;
   \item avaliar o custo computacional e o comportamento do lagrangiano aumentado,
     inclusive perto do volume máximo;
-  \item aplicar a formulação a uma gota tridimensional pendurada em um bico quadrado.
+  \item aplicar a formulação a uma gota tridimensional, validá-la com um bico
+    circular contra a solução axissimétrica e estudar casos sem simetria: um bico
+    quadrado e uma gota encostada em uma parede.
 \end{itemize}
 
 % ---------------------------------------------------------------------------
@@ -295,14 +300,130 @@ $j$ \parencite[cap.~12]{nocedal2006}.
 \end{teorema}
 
 \subsection{Programação quadrática sequencial}
+\label{sec:sqp}
 
 Os métodos de programação quadrática sequencial (SQP) resolvem, a cada iteração, um
 subproblema formado por um modelo quadrático do lagrangiano e pela linearização das
 restrições, e atualizam uma aproximação da hessiana por fórmulas quasi-Newton
 \parencite{nocedal2006, martins2021}. O SLSQP \parencite{kraft1988}, usado aqui por meio
 de \code{scipy.optimize.minimize}, é uma implementação desse tipo em que o subproblema
-é resolvido como um problema de mínimos quadrados. Quando as derivadas não são
-fornecidas, o SciPy as estima por diferenças finitas.
+é resolvido como um problema de mínimos quadrados. Nesta seção descrevemos as peças
+do método, seguindo \textcite[cap.~18]{nocedal2006} e \textcite{kraft1988}.
+
+\paragraph{SQP como método de Newton.} Considere primeiro só as restrições de igualdade.
+As condições KKT formam o sistema não linear
+$F(x, \lambda) = \bigl(\nabla f(x) + J_h(x)^{\mathsf T}\lambda,\; h(x)\bigr) = 0$, nas
+incógnitas $(x, \lambda)$. Um passo do método de Newton nesse sistema, a partir de
+$(x_k, \lambda_k)$, é
+\begin{equation}
+  \begin{bmatrix} H_k & J_h(x_k)^{\mathsf T} \\ J_h(x_k) & 0 \end{bmatrix}
+  \begin{bmatrix} p_k \\ \lambda_{k+1} \end{bmatrix}
+  = - \begin{bmatrix} \nabla f(x_k) \\ h(x_k) \end{bmatrix},
+  \qquad H_k = \nabla^2_{xx}\mathcal{L}(x_k, \lambda_k),
+  \label{eq:newton-kkt}
+\end{equation}
+em que já escrevemos o novo multiplicador $\lambda_{k+1} = \lambda_k + \Delta\lambda$ no
+lugar do incremento. O sistema \eqref{eq:newton-kkt} é exatamente o conjunto das
+condições KKT do problema quadrático
+\begin{equation}
+  \min_{p} \; \nabla f(x_k)^{\mathsf T} p + \tfrac12\, p^{\mathsf T} H_k\, p
+  \quad \text{sujeito a} \quad
+  h(x_k) + J_h(x_k)\, p = 0, \quad g(x_k) + J_g(x_k)\, p \le 0,
+  \label{eq:subproblema-qp}
+\end{equation}
+em que acrescentamos as desigualdades linearizadas. Resolver o
+subproblema~\eqref{eq:subproblema-qp} dá ao mesmo tempo a direção $p_k$, os novos
+multiplicadores e uma estimativa de quais desigualdades estão ativas: o problema
+quadrático ``escolhe'' o conjunto ativo a cada iteração. Perto de uma solução que
+satisfaz as condições de segunda ordem, com restrições ativas linearmente
+independentes, o método herda a convergência quadrática de Newton, ou superlinear
+quando $H_k$ é substituída por uma aproximação quasi-Newton
+\parencite[seção~18.7]{nocedal2006}.
+
+\paragraph{Aproximação da hessiana.} Calcular $\nabla^2_{xx}\mathcal{L}$ exigiria as
+segundas derivadas de $f$ e de todas as restrições. O SLSQP usa no lugar dela uma
+matriz $B_k$ atualizada pela fórmula BFGS, com
+$s_k = x_{k+1} - x_k$ e $y_k = \nabla_x\mathcal{L}(x_{k+1}, \lambda_{k+1}) -
+\nabla_x\mathcal{L}(x_k, \lambda_{k+1})$. Há uma dificuldade: a hessiana do lagrangiano
+só precisa ser positiva definida nas direções tangentes às restrições, de modo que
+$s_k^{\mathsf T}y_k$ pode ser negativo e o BFGS perderia a positividade. Por isso usa-se
+o BFGS amortecido de \textcite{powell1978}: troca-se $y_k$ por
+$r_k = \theta_k y_k + (1 - \theta_k) B_k s_k$, com
+\begin{equation}
+  \theta_k = \begin{cases}
+    1, & s_k^{\mathsf T}y_k \ge 0{,}2\, s_k^{\mathsf T}B_k s_k, \\[2pt]
+    \dfrac{0{,}8\, s_k^{\mathsf T}B_k s_k}{s_k^{\mathsf T}B_k s_k - s_k^{\mathsf T}y_k}, & \text{caso contrário},
+  \end{cases}
+  \qquad
+  B_{k+1} = B_k - \frac{B_k s_k s_k^{\mathsf T} B_k}{s_k^{\mathsf T}B_k s_k} + \frac{r_k r_k^{\mathsf T}}{s_k^{\mathsf T} r_k}.
+  \label{eq:bfgs-amortecido}
+\end{equation}
+Assim $s_k^{\mathsf T}r_k \ge 0{,}2\, s_k^{\mathsf T}B_k s_k > 0$ e $B_{k+1}$ continua
+positiva definida \parencite[proc.~18.2]{nocedal2006}. O SLSQP parte de $B_0 = I$.
+
+\paragraph{O subproblema como mínimos quadrados.} É daqui que vem o nome do método
+(\emph{Sequential Least SQuares Programming}). O SLSQP guarda $B_k$ na forma fatorada
+$B_k = L D L^{\mathsf T}$, com $L$ triangular inferior de diagonal unitária e $D$
+diagonal positiva, e atualiza diretamente os fatores. Completando o quadrado,
+\begin{equation}
+  \nabla f^{\mathsf T} p + \tfrac12\, p^{\mathsf T} L D L^{\mathsf T} p
+  = \tfrac12 \bigl\| D^{1/2} L^{\mathsf T} p + D^{-1/2} L^{-1} \nabla f \bigr\|^2 + \text{constante},
+\end{equation}
+de modo que \eqref{eq:subproblema-qp} vira um problema de mínimos quadrados lineares
+com restrições lineares de igualdade e de desigualdade. \textcite{kraft1988} o resolve
+com os algoritmos de \textcite{lawson1974}: as igualdades são eliminadas, e o problema
+que sobra, só com desigualdades, é transformado em um problema de mínimos quadrados
+com variáveis não negativas (NNLS), resolvido por um método de conjunto ativo. Os
+limites simples $\ell \le x \le u$ entram no subproblema como desigualdades lineares a
+mais.
+
+\paragraph{Busca linear e função de mérito.} O passo completo $x_k + p_k$ pode piorar
+tanto $f$ quanto a viabilidade. Para decidir quanto andar, o SLSQP usa a função de
+mérito $\ell_1$ (penalidade exata)
+\begin{equation}
+  \phi(x; \rho) = f(x) + \sum_j \rho_j\, |h_j(x)| + \sum_j \rho_j \max\bigl(0, g_j(x)\bigr),
+  \label{eq:merito}
+\end{equation}
+cujos minimizadores locais coincidem com as soluções do problema original quando cada
+peso $\rho_j$ é maior que o módulo do multiplicador correspondente
+\parencite[seção~15.4]{nocedal2006}. Os pesos são atualizados a partir dos
+multiplicadores do subproblema, e o passo $\alpha_k \in (0, 1]$ é reduzido, por
+interpolação, até que $\phi$ diminua o suficiente. Com $B_k$ positiva definida e
+$\rho$ grande o bastante, $p_k$ é uma direção de descida de $\phi$. Diferente da
+penalidade quadrática, aqui $\rho$ não precisa crescer indefinidamente: a penalidade
+só serve para aceitar ou recusar passos, e quem impõe as restrições é o
+subproblema~\eqref{eq:subproblema-qp}.
+
+\paragraph{Parada, multiplicadores e custo.} No SciPy, o SLSQP para quando a variação
+de $f$ entre duas iterações e a violação das restrições ficam abaixo de \code{ftol}.
+Ao final, ele devolve também os multiplicadores do último subproblema
+(\code{res.multipliers}), na convenção $\nabla f = \sum_j \lambda_j \nabla c_j$, com as
+restrições escritas como $c_j(x) = 0$ ou $c_j(x) \ge 0$; no
+Problema~\ref{prob:discreto} isso dá diretamente $\pi\lh$. Quando os gradientes não
+são fornecidos, o SciPy os estima por diferenças finitas progressivas: cada gradiente
+custa $n + 1$ avaliações da função e de cada restrição, e, como cada avaliação custa
+$O(n)$, a iteração passa a custar $O(n^2)$ só em avaliações. Somado ao subproblema
+denso, de custo $O(n^3)$, isso torna o método caro quando $n$ é grande, o que
+voltaremos a ver na versão tridimensional. O método completo está no
+Algoritmo~\ref{alg:slsqp}.
+
+\begin{algorithm}[H]
+\caption{SLSQP \parencite{kraft1988, nocedal2006}}
+\label{alg:slsqp}
+\begin{algorithmic}[1]
+  \Require ponto inicial $x_0$; $B_0 = I$; pesos de mérito $\rho_0$; tolerância \code{ftol}
+  \Ensure ponto ótimo $x^*$ e multiplicadores $\lambda^*$, $\sigma^*$
+  \State $k \gets 0$
+  \While{não convergiu}
+    \State resolve \eqref{eq:subproblema-qp} com $H_k = B_k$ (mínimos quadrados, NNLS) e obtém $p_k$, $\lambda_{k+1}$, $\sigma_{k+1}$
+    \State atualiza os pesos $\rho$ a partir de $|\lambda_{k+1}|$ e $|\sigma_{k+1}|$
+    \State escolhe $\alpha_k \in (0, 1]$ que reduz $\phi(x_k + \alpha_k p_k; \rho)$ \Comment{busca linear}
+    \State $x_{k+1} \gets x_k + \alpha_k p_k$
+    \State atualiza $B_{k+1}$ por \eqref{eq:bfgs-amortecido} \Comment{BFGS amortecido}
+    \State $k \gets k + 1$
+  \EndWhile
+\end{algorithmic}
+\end{algorithm}
 
 \subsection{Penalidade quadrática}
 
@@ -429,6 +550,82 @@ na convenção $\nabla(\Eh/\pi) = \lh\, \nabla\Vh$, é $\lh = (A - B\dhat)/\pi$ 
 Proposição~\ref{prop:multiplicador}. É com essa normalização que comparamos os
 métodos.
 
+\subsection{Versão tridimensional}
+\label{sec:modelo-3d}
+
+Na versão tridimensional, a superfície da gota é uma malha de triângulos planos. O
+ponto de partida é, como no caso axissimétrico, uma calota esférica cortada ao longo
+de um círculo de raio 1, discretizada em $n_a$ anéis e $n_s$ setores. Cada vértice
+livre se move sobre a reta que o liga ao centro $c$ da esfera, como em
+\eqref{eq:parametrizacao}: $P_i(x) = P_i^0 + x_i\,(P_i^0 - c)$. A energia e o volume
+são somas sobre os triângulos; o volume vem do teorema da divergência,
+$\Vh = \frac13 \oint P \cdot n\, dA$, que vale para a superfície aberta porque a
+abertura fica no plano $z = 0$, onde $P \cdot n = 0$. Consideramos dois bicos:
+
+\begin{itemize}
+  \item \textbf{Bico circular} de raio 1 no plano $z = 0$. A calota é cortada
+    exatamente nesse plano, de modo que o anel do corte é a própria borda do bico. Os
+    vértices desse anel ficam fixos, que é o análogo tridimensional de $x_0 = 0$ no
+    Problema~\ref{prob:discreto}, e as variáveis são os demais vértices.
+  \item \textbf{Bico quadrado} $[-1, 1]^2$ no plano $z = 0$. Como o quadrado contém o
+    círculo do corte e o toca em quatro pontos, a calota é cortada um pouco abaixo,
+    em $z = -0{,}05$, e um ``colar'' de triângulos liga o anel do corte ao contorno do
+    bico. Os vértices do quadrado ficam fixos e os do anel do corte são livres.
+\end{itemize}
+
+Para que o ponto de partida já satisfaça a restrição, o raio da esfera é escolhido
+de modo que o volume \emph{da malha} seja $\Vh_0$. A fórmula da calota exata dá uma
+primeira estimativa de $h$ (o centro fica em $z = -h$); como a malha de triângulos, e
+no bico quadrado também o colar, alteram um pouco o volume, $h$ é então corrigido pelo
+método de Brent aplicado a $\Vh_{\text{malha}}(h) - \Vh_0$.
+
+\paragraph{Gradientes exatos.} Seja um triângulo de vértices $a, b, c$, com
+$u = b - a$, $v = c - a$ e $N = u \times v = 2A\,n$. A sua contribuição para a energia
+é $|N|/2 + (B/4)\, N_z\, S$, em que $S = \sum_p w_p\, T_z(\xi_p)^2$ é a quadratura de
+$z^2$, e para o volume é $a \cdot (b \times c)/6$, porque $T \cdot N$ é constante em
+um triângulo plano. Derivando,
+\begin{equation}
+  \frac{\partial |N|}{\partial b} = v \times n, \quad
+  \frac{\partial |N|}{\partial c} = n \times u, \quad
+  \frac{\partial \Vh_\triangle}{\partial a} = \frac{b \times c}{6}, \quad
+  \frac{\partial \Vh_\triangle}{\partial b} = \frac{c \times a}{6}, \quad
+  \frac{\partial \Vh_\triangle}{\partial c} = \frac{a \times b}{6},
+  \label{eq:grad-3d}
+\end{equation}
+com $\partial |N|/\partial a = -(\partial |N|/\partial b + \partial |N|/\partial c)$ e as
+derivadas de $N_z$ obtidas trocando $n$ por $e_z$. As contribuições de cada triângulo
+são somadas em cada vértice, e a regra da cadeia dá
+$\partial \Eh / \partial x_i = \nabla_{P_i} \Eh \cdot (P_i^0 - c)$. Os testes conferem
+esses gradientes com diferenças centrais, com erro relativo da ordem de $10^{-9}$.
+
+\paragraph{Parede.} Para quebrar a simetria, acrescentamos uma parede plana vertical
+$\hat x = w$, e exigimos que a gota fique do lado $\hat x \le w$. Como cada vértice
+anda sobre uma reta, a condição $n_w \cdot P_i(x) \le w$, com $n_w = e_x$, é
+\emph{linear} em $x_i$:
+\begin{equation}
+  \bigl(n_w \cdot d_i\bigr)\, x_i \le w - n_w \cdot c - n_w \cdot d_i,
+  \qquad d_i = P_i^0 - c,
+  \label{eq:parede}
+\end{equation}
+e só os vértices com $n_w \cdot d_i > 0$, que se aproximam da parede quando
+$x_i$ cresce, geram uma restrição. Como o semiespaço é convexo, se os três vértices de
+um triângulo plano o respeitam, o triângulo inteiro também respeita. Usamos $w = 1$,
+uma parede que encosta na borda do bico circular.
+
+\begin{problema}
+\begin{equation}
+  \min_{x} \; \Eh(x) \quad \text{sujeito a} \quad
+  \Vh(x) = \Vh_0, \quad x_i \ge -1 + 10^{-8}
+  \label{eq:problema-3d}
+\end{equation}
+e, no caso com parede, as restrições \eqref{eq:parede}.
+\label{prob:3d}
+\end{problema}
+
+As restrições de \eqref{eq:parede} são desigualdades, e as ativas na solução indicam
+os vértices que tocam a parede. É um exemplo direto das condições KKT: cada uma tem
+multiplicador $\sigma_j \ge 0$, nulo se o vértice não encosta.
+
 \section{Método do tiro}
 
 Para um valor de $A$, integramos \eqref{eq:edo} com o RK4, passo $\Delta s = 0{,}001$,
@@ -485,15 +682,12 @@ Foram usadas quatro abordagens:
     Acrescentamos duas salvaguardas que não fazem parte do algoritmo do livro: um teto
     $\mu \le 10^{12}$ e uma parada por estagnação, discutida na
     Seção~\ref{sec:discussao}.
-  \item \textbf{Gota tridimensional} (\code{find\_droplet\_optimization\_3d}): a
-    superfície é uma malha de triângulos formada por uma calota (hemisfério de raio 1
-    com centro em $z = -0{,}2$) e por um ``colar'' de triângulos que a liga ao contorno
-    do bico, um quadrado $[-1, 1]^2$ no plano $z = 0$. As variáveis são, como em
-    \eqref{eq:parametrizacao}, os deslocamentos radiais dos vértices da calota; os
-    vértices do bico ficam fixos. As integrais \eqref{eq:energia-adim} são calculadas
-    com a regra de Strang--Fix de quatro pontos, exata até grau 3, e o problema é
-    resolvido pelo SLSQP com diferenças finitas. A opção \code{fix\_boundary} fixa
-    também o anel em que a calota foi cortada.
+  \item \textbf{Gota tridimensional} (\code{find\_droplet\_optimization\_3d}):
+    resolve o Problema~\ref{prob:3d} da Seção~\ref{sec:modelo-3d} com o SLSQP
+    (\code{ftol} $= 10^{-12}$), agora com os gradientes exatos \eqref{eq:grad-3d}. As
+    integrais \eqref{eq:energia-adim} são calculadas com a regra de Strang--Fix de
+    quatro pontos, exata até grau 3. A parede, quando existe, entra como restrição
+    linear (\code{scipy.optimize.LinearConstraint}).
 \end{itemize}
 
 \subsection{Roteiro de Execução}
@@ -585,6 +779,29 @@ um erro de \num{7.3e-9}.
   \label{tab:exemplo}
   \input{tabelas/exemplo_livro.tex}
 \end{table}
+
+\subsection{O SLSQP no mesmo exemplo}
+
+Para ilustrar as peças da Seção~\ref{sec:sqp}, resolvemos o mesmo exemplo com o SLSQP,
+fornecendo os gradientes exatos. A partida em $(0, 0)$ não serve aqui: nela o
+gradiente da restrição se anula, e a linearização
+$h(x_0) + \nabla h(x_0)^{\mathsf T} p = 0$ do subproblema~\eqref{eq:subproblema-qp}
+não tem solução. Partindo de $x_0 = (2;\, 0{,}5)$, o método converge em 11 iterações
+para $x^*$, com multiplicador $-\num{1.41421356}$: o sinal oposto ao do livro vem
+apenas da convenção do SciPy, $\nabla f = \lambda \nabla h$. A
+Figura~\ref{fig:slsqp-livro} mostra os iterados. Os primeiros passos se afastam
+bastante da elipse: com $B_0 = I$, o modelo quadrático ainda não representa a
+curvatura do lagrangiano, e a busca linear aceita passos longos enquanto a função de
+mérito diminui. À medida que o BFGS acumula informação, os passos ficam curtos e
+convergem rapidamente para $x^*$.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.55\textwidth]{slsqp_livro.pdf}
+  \caption{Iterados do SLSQP no Exemplo 5.8 de \textcite{martins2021}, sobre as curvas
+    de nível de $f(x) = x_1 + 2x_2$ (Autoria própria)}
+  \label{fig:slsqp-livro}
+\end{figure}
 
 \subsection{Comparação dos métodos}
 
@@ -694,31 +911,85 @@ a crescer.
   \label{fig:lambda-volume}
 \end{figure}
 
-\subsection{Gota tridimensional}
+\subsection{Gota tridimensional com bico circular}
 
-A Figura~\ref{fig:gota3d} e a Tabela~\ref{tab:gota3d} mostram a gota tridimensional de
-volume $\Vh = 5$ pendurada no bico quadrado, com uma malha de 8 anéis e 16 setores
-(145 vértices, dos quais 129 são variáveis, e 272 triângulos) e $B = \num{0.2695}$, o
-mesmo usado em \code{src/3D/test.py}. Nos dois casos o SLSQP convergiu, em cerca de 200
-iterações e de 25 a 32 segundos, com o volume correto até a precisão de máquina. Fixar
-o anel do corte deixa a gota mais alta ($\dhat = \num{1.839}$ contra \num{1.632}) e
-aumenta a energia em \qty{4.8}{\percent}, como se espera de um problema com mais
-restrições.
+Com o bico circular, a gota tridimensional deve reproduzir a gota axissimétrica, o que
+dá à versão 3D uma solução de referência. A Tabela~\ref{tab:eixo3d} e a
+Figura~\ref{fig:eixo3d} comparam as duas para $\Vh = 5$ e $\Vh = 20$, com o mesmo
+$B = \num{0.134753}$ do caso axissimétrico, em malhas de $6 \times 12$ até
+$24 \times 48$ (anéis $\times$ setores). Os vértices da gota 3D, levados ao plano
+$(\hat r, \hat z)$, caem sobre o perfil da EDO, e a diferença na altura, na energia e
+no multiplicador diminui com o refinamento, aproximadamente como $n^{-1}$, em que $n$
+é o número de variáveis. Como $n$ cresce com o quadrado do número de divisões, isso
+corresponde a um erro de segunda ordem no tamanho dos triângulos, a mesma ordem
+observada no caso axissimétrico. Na malha mais fina, a altura difere da EDO em cerca
+de \qty{0.3}{\percent} e o multiplicador em menos de \qty{0.2}{\percent}, nos dois
+volumes. O multiplicador do SLSQP, dividido por $\pi$, converge para o
+$\lh = (A - B\dhat)/\pi$ da EDO, de modo que a interpretação como pressão continua
+valendo em 3D.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{eixo3d.pdf}
+  \caption{Gota 3D com bico circular comparada com a EDO: vértices da malha mais fina
+    no plano $(\hat r, \hat z)$ (esquerda e centro) e diferença para a EDO em função do
+    número de variáveis (direita) (Autoria própria)}
+  \label{fig:eixo3d}
+\end{figure}
+
+\begin{table}[H]
+  \centering
+  \caption{Gota 3D com bico circular e gota axissimétrica (EDO) (Autoria própria)}
+  \label{tab:eixo3d}
+  \input{tabelas/eixo3d.tex}
+\end{table}
+
+O gradiente exato muda bastante o custo. Na malha $8 \times 16$, com $\Vh = 20$, o
+SLSQP com diferenças finitas leva cerca de dez vezes mais tempo que com o
+gradiente~\eqref{eq:grad-3d}, para o mesmo número de iterações e a mesma solução. Com
+o gradiente exato, mesmo a malha $24 \times 48$, com mais de mil variáveis, é
+resolvida em menos de um minuto.
+
+\subsection{Gotas sem simetria: bico quadrado e parede}
+
+A Figura~\ref{fig:gota3d} e a Tabela~\ref{tab:gota3d} mostram a gota de volume
+$\Vh = 20$ na malha $12 \times 24$ em três situações: no bico circular, no bico
+quadrado e no bico circular com a parede $\hat x \le 1$. No bico quadrado a gota
+perde a simetria de rotação perto do bico, onde o colar acompanha o contorno do
+quadrado, mas logo abaixo volta a ficar praticamente redonda: o efeito do formato do
+bico fica restrito a uma região perto da linha de contato.
 
 \begin{figure}[H]
   \centering
   \includegraphics[width=\textwidth]{gota3d.pdf}
-  \caption{Gota de volume $\Vh = 5$ pendurada em um bico quadrado, com o anel do corte
-    da calota livre (esquerda) e fixo (direita) (Autoria própria)}
+  \caption{Gota de volume $\Vh = 20$ pendurada em um bico circular, em um bico
+    quadrado e em um bico circular com uma parede encostada (Autoria própria)}
   \label{fig:gota3d}
 \end{figure}
 
 \begin{table}[H]
   \centering
-  \caption{Resultados da gota tridimensional com bico quadrado e $\Vh = 5$ (Autoria própria)}
+  \caption{Gotas 3D de volume $\Vh = 20$, malha $12 \times 24$ (Autoria própria)}
   \label{tab:gota3d}
   \input{tabelas/gota3d.tex}
 \end{table}
+
+Com a parede, a gota não pode crescer para o lado $\hat x > 1$ e se acomoda do outro
+lado e para baixo (Figura~\ref{fig:parede}): ela fica achatada contra a parede, mais
+comprida e deslocada para $\hat x < 0$. As restrições ativas são as dos vértices que
+encostam na parede, e todas têm multiplicador positivo, como pedem as condições KKT. A
+energia e a pressão aumentam em relação à gota livre, como se espera ao acrescentar
+restrições a um problema de minimização: a gota livre ultrapassa $\hat x = 1$ e
+deixa de ser viável.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.9\textwidth]{parede.pdf}
+  \caption{Gota de volume $\Vh = 20$ no bico circular, com e sem a parede
+    $\hat x \le 1$: vista de baixo (esquerda) e corte no plano $\hat y = 0$ (direita)
+    (Autoria própria)}
+  \label{fig:parede}
+\end{figure}
 
 \section{Discussão}
 \label{sec:discussao}
@@ -777,12 +1048,17 @@ $-7451$. Por isso a implementação interrompe o método quando um subproblema n
 mais o ponto nem reduz a violação, informa que houve estagnação e mantém os
 multiplicadores do último subproblema.
 
-Na versão tridimensional, a formulação variacional funciona sem mudanças conceituais,
-mas o custo é bem maior: com 129 variáveis e gradientes por diferenças finitas, o
-SLSQP levou de 25 a 32 segundos. Além disso, a malha tem uma única camada de
-triângulos entre o círculo da calota e o quadrado do bico, o que limita a precisão
-perto da linha de contato, e não há uma solução de referência, como a EDO, para medir o
-erro.
+Na versão tridimensional, a formulação variacional funciona sem mudanças conceituais.
+O bico circular deu a ela uma referência: a gota 3D converge para a gota da EDO com
+erro de segunda ordem no tamanho dos triângulos, e o multiplicador continua sendo a
+pressão. Dois pontos da implementação foram decisivos. O primeiro é partir de uma
+calota que já tem o volume da gota, de modo que o SLSQP começa viável e só precisa
+deformar a superfície. O segundo é o gradiente exato: sem ele, cada gradiente custa
+$n + 1$ avaliações e o refinamento da malha fica proibitivo. A parametrização radial
+tem uma limitação: cada vértice só anda sobre uma reta fixa, de modo que, quando a gota
+se deforma muito, como contra a parede, os triângulos ficam distorcidos. Uma malha
+com vértices livres nas três direções, com algum controle da qualidade dos triângulos,
+permitiria deformações maiores.
 
 % ---------------------------------------------------------------------------
 \chapter{Conclusão}
@@ -804,10 +1080,12 @@ primeiro subproblema não se afaste da restrição, sob pena de o método conver
 outra solução, como a gota desprendida perto do volume máximo; e o critério de parada
 deve ser compatível com a precisão dos subproblemas.
 
-Por fim, a mesma formulação permitiu obter a forma de uma gota pendurada em um bico
-quadrado, caso que a EDO axissimétrica não cobre. Os próximos passos são escrever o
-gradiente exato na malha tridimensional, aplicar a ela o lagrangiano aumentado e
-refinar a malha perto da linha de contato.
+Por fim, a mesma formulação, com o gradiente exato, resolveu a gota tridimensional.
+Com bico circular, ela reproduziu a gota axissimétrica, com erro de segunda ordem no
+tamanho dos triângulos; com bico quadrado e com uma parede encostada, obteve formas
+sem simetria, que a EDO axissimétrica não cobre. Os próximos passos são aplicar o
+lagrangiano aumentado à malha tridimensional e permitir que os vértices se movam em
+todas as direções, para tratar deformações maiores.
 
 \printbibliography[heading=bibintoc, title={Referências}]
 
